@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import './App.css';
 
 function App() {
@@ -34,19 +34,126 @@ function App() {
   const isInitialMount = useRef(true);
 
   // ========================================
+  // CALCULATION FUNCTIONS (Defined Early)
+  // ========================================
+  const toRad = useCallback((degrees) => {
+    return degrees * (Math.PI / 180);
+  }, []);
+
+  const calculateDistance = useCallback((lat1, lon1, lat2, lon2) => {
+    const R = 6371;
+    const dLat = toRad(lat2 - lat1);
+    const dLon = toRad(lon2 - lon1);
+    
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+             Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+             Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  }, [toRad]);
+
+  const showGpsMessage = useCallback((message, isError = false) => {
+    setGpsMessage(message);
+    setShowGpsAlert(true);
+
+    if (!isError) {
+      setTimeout(() => {
+        setShowGpsAlert(false);
+      }, 3000);
+    }
+  }, []);
+
+  const handleGPSError = useCallback((error) => {
+    let message = '';
+    switch(error.code) {
+      case error.PERMISSION_DENIED:
+        message = 'Please allow GPS permission';
+        break;
+      case error.POSITION_UNAVAILABLE:
+        message = 'GPS position unavailable';
+        break;
+      case error.TIMEOUT:
+        message = 'GPS request timeout';
+        break;
+      default:
+        message = 'GPS error occurred';
+    }
+    showGpsMessage(message, true);
+  }, [showGpsMessage]);
+
+  const updatePosition = useCallback((position) => {
+    if (!currentTrip || !currentTrip.isActive) return;
+
+    const newPosition = {
+      lat: position.coords.latitude,
+      lng: position.coords.longitude
+    };
+
+    if (lastPositionRef.current) {
+      const distance = calculateDistance(
+        lastPositionRef.current.lat,
+        lastPositionRef.current.lng,
+        newPosition.lat,
+        newPosition.lng
+      );
+
+      if (distance > 0.01) {
+        console.log('Distance traveled:', distance.toFixed(2), 'km');
+        
+        setCurrentTrip(prev => ({
+          ...prev,
+          distance: prev.distance + distance
+        }));
+        setTotalKmSinceLastFill(prev => prev + distance);
+      }
+    }
+
+    lastPositionRef.current = newPosition;
+  }, [currentTrip, calculateDistance]);
+
+  // ========================================
   // LOAD DATA ON MOUNT - RUNS ONCE
   // ========================================
   useEffect(() => {
     console.log('Loading data from localStorage...');
+    const loadData = () => {
+      try {
+        const stored = localStorage.getItem('petrolTrackerData');
+        console.log('Raw data from localStorage:', stored);
+        
+        if (stored) {
+          const data = JSON.parse(stored);
+          console.log('Parsed data:', data);
+          
+          setPetrolEntries(data.petrolEntries || []);
+          setTrips(data.trips || []);
+          setCurrentTrip(data.currentTrip || null);
+          setTotalKmSinceLastFill(data.totalKmSinceLastFill || 0);
+          
+          console.log('Data loaded successfully!');
+        } else {
+          console.log('No saved data found');
+        }
+      } catch (error) {
+        console.error('Error loading data:', error);
+        alert('Error loading saved data. Starting fresh.');
+      }
+    };
+
+    const setTodayDate = () => {
+      const today = new Date().toISOString().split('T')[0];
+      setFillDate(today);
+    };
+
     loadData();
     setTodayDate();
-  }, []); // Empty dependency array = runs only once on mount
+  }, []);
 
   // ========================================
   // SAVE DATA WHENEVER IT CHANGES
   // ========================================
   useEffect(() => {
-    // Don't save on initial mount (first render)
     if (isInitialMount.current) {
       isInitialMount.current = false;
       return;
@@ -77,7 +184,6 @@ function App() {
 
     window.addEventListener('beforeinstallprompt', handler);
 
-    // Check if already installed
     if (window.matchMedia('(display-mode: standalone)').matches) {
       setShowInstallPrompt(false);
     }
@@ -89,48 +195,43 @@ function App() {
   // RESUME TRACKING ON MOUNT IF NEEDED
   // ========================================
   useEffect(() => {
+    const resumeTripOnMount = () => {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          lastPositionRef.current = {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
+          };
+
+          watchIdRef.current = navigator.geolocation.watchPosition(
+            updatePosition,
+            handleGPSError,
+            {
+              enableHighAccuracy: true,
+              timeout: 5000,
+              maximumAge: 0
+            }
+          );
+
+          setIsTracking(true);
+          showGpsMessage('🟢 Tracking resumed...', false);
+        },
+        handleGPSError
+      );
+    };
+
     if (currentTrip && currentTrip.isActive) {
       console.log('Resuming active trip...');
-      resumeTrip();
+      resumeTripOnMount();
     }
+
     return () => {
       if (watchIdRef.current) {
         navigator.geolocation.clearWatch(watchIdRef.current);
       }
     };
-  }, []); // Only run once on mount
-
-  // ========================================
-  // DATA FUNCTIONS
-  // ========================================
-  const loadData = () => {
-    try {
-      const stored = localStorage.getItem('petrolTrackerData');
-      console.log('Raw data from localStorage:', stored);
-      
-      if (stored) {
-        const data = JSON.parse(stored);
-        console.log('Parsed data:', data);
-        
-        setPetrolEntries(data.petrolEntries || []);
-        setTrips(data.trips || []);
-        setCurrentTrip(data.currentTrip || null);
-        setTotalKmSinceLastFill(data.totalKmSinceLastFill || 0);
-        
-        console.log('Data loaded successfully!');
-      } else {
-        console.log('No saved data found');
-      }
-    } catch (error) {
-      console.error('Error loading data:', error);
-      alert('Error loading saved data. Starting fresh.');
-    }
-  };
-
-  const setTodayDate = () => {
-    const today = new Date().toISOString().split('T')[0];
-    setFillDate(today);
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ========================================
   // RESET FUNCTIONS
@@ -140,23 +241,21 @@ function App() {
   };
 
   const confirmReset = () => {
-    // Stop any active tracking
     if (watchIdRef.current) {
       navigator.geolocation.clearWatch(watchIdRef.current);
       watchIdRef.current = null;
     }
 
-    // Clear all data
     setPetrolEntries([]);
     setTrips([]);
     setCurrentTrip(null);
     setTotalKmSinceLastFill(0);
     setLitres('');
     setPricePerLitre('');
-    setTodayDate();
+    const today = new Date().toISOString().split('T')[0];
+    setFillDate(today);
     setIsTracking(false);
     
-    // Clear localStorage
     localStorage.removeItem('petrolTrackerData');
     
     setShowResetConfirm(false);
@@ -228,7 +327,8 @@ function App() {
     setTrips([]);
     setLitres('');
     setPricePerLitre('');
-    setTodayDate();
+    const today = new Date().toISOString().split('T')[0];
+    setFillDate(today);
 
     alert('✅ Petrol entry saved successfully!');
     setActiveScreen('dashboard');
@@ -279,53 +379,6 @@ function App() {
     );
   };
 
-  const updatePosition = (position) => {
-    if (!currentTrip || !currentTrip.isActive) return;
-
-    const newPosition = {
-      lat: position.coords.latitude,
-      lng: position.coords.longitude
-    };
-
-    if (lastPositionRef.current) {
-      const distance = calculateDistance(
-        lastPositionRef.current.lat,
-        lastPositionRef.current.lng,
-        newPosition.lat,
-        newPosition.lng
-      );
-
-      if (distance > 0.01) {
-        console.log('Distance traveled:', distance.toFixed(2), 'km');
-        
-        setCurrentTrip(prev => ({
-          ...prev,
-          distance: prev.distance + distance
-        }));
-        setTotalKmSinceLastFill(prev => prev + distance);
-      }
-    }
-
-    lastPositionRef.current = newPosition;
-  };
-
-  const calculateDistance = (lat1, lon1, lat2, lon2) => {
-    const R = 6371;
-    const dLat = toRad(lat2 - lat1);
-    const dLon = toRad(lon2 - lon1);
-    
-    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-             Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
-             Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c;
-  };
-
-  const toRad = (degrees) => {
-    return degrees * (Math.PI / 180);
-  };
-
   const stopTrip = () => {
     if (watchIdRef.current) {
       navigator.geolocation.clearWatch(watchIdRef.current);
@@ -347,60 +400,6 @@ function App() {
     lastPositionRef.current = null;
     setIsTracking(false);
     showGpsMessage('⏸️ Tracking stopped', false);
-  };
-
-  const resumeTrip = () => {
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        lastPositionRef.current = {
-          lat: position.coords.latitude,
-          lng: position.coords.longitude
-        };
-
-        watchIdRef.current = navigator.geolocation.watchPosition(
-          updatePosition,
-          handleGPSError,
-          {
-            enableHighAccuracy: true,
-            timeout: 5000,
-            maximumAge: 0
-          }
-        );
-
-        setIsTracking(true);
-        showGpsMessage('🟢 Tracking resumed...', false);
-      },
-      handleGPSError
-    );
-  };
-
-  const handleGPSError = (error) => {
-    let message = '';
-    switch(error.code) {
-      case error.PERMISSION_DENIED:
-        message = 'Please allow GPS permission';
-        break;
-      case error.POSITION_UNAVAILABLE:
-        message = 'GPS position unavailable';
-        break;
-      case error.TIMEOUT:
-        message = 'GPS request timeout';
-        break;
-      default:
-        message = 'GPS error occurred';
-    }
-    showGpsMessage(message, true);
-  };
-
-  const showGpsMessage = (message, isError = false) => {
-    setGpsMessage(message);
-    setShowGpsAlert(true);
-
-    if (!isError) {
-      setTimeout(() => {
-        setShowGpsAlert(false);
-      }, 3000);
-    }
   };
 
   // ========================================
@@ -443,7 +442,6 @@ function App() {
 
     return (
       <div>
-        {/* Install Prompt */}
         {showInstallPrompt && (
           <div className="card install-prompt">
             <h2>📱 Install App</h2>
@@ -463,7 +461,6 @@ function App() {
           </div>
         )}
 
-        {/* Current Tank Info */}
         <div className="card">
           <h2>🏍️ Current Tank</h2>
           {petrolEntries.length === 0 ? (
@@ -489,7 +486,6 @@ function App() {
           )}
         </div>
 
-        {/* Monthly Summary */}
         <div className="card">
           <h2>📊 This Month</h2>
           <div className="stats-grid">
@@ -512,7 +508,6 @@ function App() {
           </div>
         </div>
 
-        {/* Reset Button */}
         {petrolEntries.length > 0 && (
           <div className="card">
             <h2>⚙️ Settings</h2>
@@ -669,12 +664,8 @@ function App() {
     );
   };
 
-  // ========================================
-  // MAIN RENDER
-  // ========================================
   return (
     <div className="App">
-      {/* Reset Confirmation Modal */}
       {showResetConfirm && (
         <div className="modal-overlay">
           <div className="modal">

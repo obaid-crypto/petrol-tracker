@@ -27,14 +27,15 @@ function App() {
         lastLng: 0,
         accuracy: 0,
         speed: 0,
-        status: 'Not started'
+        status: 'Not started',
+        lastDistance: 0
     });
 
     const watchIdRef = useRef(null);
     const lastPositionRef = useRef(null);
     const isInitialMount = useRef(true);
     const positionCountRef = useRef(0);
-    const retryTimeoutRef = useRef(null);
+    const positionHistoryRef = useRef([]); // Track last few positions
 
     const toRad = useCallback((degrees) => {
         return degrees * (Math.PI / 180);
@@ -82,9 +83,8 @@ function App() {
             case error.TIMEOUT:
                 message = 'GPS timeout. Retrying...';
                 status = 'Searching for signal...';
-                // Don't show error alert for timeout, we'll retry
                 setGpsDebug(prev => ({ ...prev, status }));
-                return; // Don't show alert, just retry
+                return;
             default:
                 message = 'GPS error: ' + error.message;
                 status = 'Error';
@@ -94,17 +94,32 @@ function App() {
         showGpsMessage(message, true);
     }, [showGpsMessage]);
 
-    // Main GPS update function
+    // IMPROVED GPS update with drift filtering
     const handlePositionUpdate = useCallback((position) => {
         positionCountRef.current += 1;
         const updateNum = positionCountRef.current;
 
         console.log(`\n========== GPS Update #${updateNum} ==========`);
         console.log('Time:', new Date().toLocaleTimeString());
-        console.log('Lat:', position.coords.latitude.toFixed(6));
-        console.log('Lng:', position.coords.longitude.toFixed(6));
+        console.log('Lat:', position.coords.latitude.toFixed(8));
+        console.log('Lng:', position.coords.longitude.toFixed(8));
         console.log('Accuracy:', position.coords.accuracy.toFixed(1), 'm');
         console.log('Speed:', position.coords.speed, 'm/s');
+
+        const newPosition = {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+            accuracy: position.coords.accuracy,
+            speed: position.coords.speed || 0,
+            timestamp: Date.now()
+        };
+
+        // Add to position history
+        positionHistoryRef.current.push(newPosition);
+        // Keep only last 5 positions
+        if (positionHistoryRef.current.length > 5) {
+            positionHistoryRef.current.shift();
+        }
 
         // Update debug display
         setGpsDebug({
@@ -113,14 +128,9 @@ function App() {
             lastLng: position.coords.longitude,
             accuracy: position.coords.accuracy,
             speed: position.coords.speed || 0,
-            status: 'Active ✓'
+            status: 'Active ✓',
+            lastDistance: 0
         });
-
-        const newPosition = {
-            lat: position.coords.latitude,
-            lng: position.coords.longitude,
-            accuracy: position.coords.accuracy
-        };
 
         if (lastPositionRef.current) {
             const distance = calculateDistance(
@@ -131,11 +141,67 @@ function App() {
             );
 
             const distanceMeters = distance * 1000;
-            console.log('Distance:', distanceMeters.toFixed(2), 'm');
+            console.log('Distance from last:', distanceMeters.toFixed(2), 'm');
 
-            // Lower threshold and looser accuracy for better tracking
-            if (distanceMeters > 3 && position.coords.accuracy < 100) {
-                console.log('✅ UPDATING DISTANCE');
+            // IMPROVED FILTERING LOGIC
+            let shouldUpdate = false;
+            let reason = '';
+
+            // Filter 1: Minimum distance threshold (10 meters to avoid drift)
+            if (distanceMeters < 10) {
+                reason = 'Distance < 10m (GPS drift)';
+                console.log('⏭️', reason);
+            }
+            // Filter 2: Accuracy must be good (< 30 meters)
+            else if (position.coords.accuracy > 30) {
+                reason = 'Accuracy too poor (>' + position.coords.accuracy.toFixed(0) + 'm)';
+                console.log('⏭️', reason);
+            }
+            // Filter 3: Check if speed indicates movement
+            else if (position.coords.speed !== null && position.coords.speed < 0.5) {
+                // If speed is available and < 0.5 m/s (1.8 km/h), might be stationary
+                // But still allow if distance is significant (>15m)
+                if (distanceMeters < 15) {
+                    reason = 'Speed < 0.5 m/s and distance < 15m (likely stationary)';
+                    console.log('⏭️', reason);
+                } else {
+                    shouldUpdate = true;
+                    reason = 'Distance significant despite low speed';
+                }
+            }
+            // Filter 4: If we have multiple positions, check for consistent movement
+            else if (positionHistoryRef.current.length >= 3) {
+                // Calculate total distance over last 3 positions
+                let totalDistance = 0;
+                for (let i = 1; i < positionHistoryRef.current.length; i++) {
+                    const prev = positionHistoryRef.current[i - 1];
+                    const curr = positionHistoryRef.current[i];
+                    totalDistance += calculateDistance(prev.lat, prev.lng, curr.lat, curr.lng) * 1000;
+                }
+
+                console.log('Total distance over', positionHistoryRef.current.length, 'updates:', totalDistance.toFixed(2), 'm');
+
+                // If total distance over multiple updates is significant, it's real movement
+                if (totalDistance > 20) {
+                    shouldUpdate = true;
+                    reason = 'Consistent movement detected';
+                } else if (distanceMeters > 20) {
+                    shouldUpdate = true;
+                    reason = 'Single large movement';
+                } else {
+                    reason = 'Total movement too small (GPS drift)';
+                    console.log('⏭️', reason);
+                }
+            }
+            // Filter 5: Large single movement (likely real)
+            else if (distanceMeters > 20) {
+                shouldUpdate = true;
+                reason = 'Large movement detected';
+            }
+
+            if (shouldUpdate) {
+                console.log('✅ UPDATING DISTANCE -', reason);
+                console.log('Adding:', distanceMeters.toFixed(2), 'm (', distance.toFixed(6), 'km)');
 
                 setCurrentTrip(prev => {
                     if (!prev) return prev;
@@ -150,14 +216,21 @@ function App() {
                     return newTotal;
                 });
 
+                setGpsDebug(prev => ({ ...prev, lastDistance: distanceMeters }));
+
+                // Update last position reference
                 lastPositionRef.current = newPosition;
+
+                // Clear position history after successful update
+                positionHistoryRef.current = [newPosition];
             } else {
-                if (distanceMeters <= 3) console.log('⏭️ Distance < 3m');
-                if (position.coords.accuracy >= 100) console.log('⏭️ Accuracy > 100m');
+                console.log('⏭️ Skipped -', reason);
+                setGpsDebug(prev => ({ ...prev, lastDistance: 0 }));
             }
         } else {
-            console.log('ℹ️ First position - setting reference');
+            console.log('ℹ️ First position - setting as reference');
             lastPositionRef.current = newPosition;
+            positionHistoryRef.current = [newPosition];
         }
 
         console.log('==========================================\n');
@@ -230,10 +303,6 @@ function App() {
             navigator.geolocation.clearWatch(watchIdRef.current);
             watchIdRef.current = null;
         }
-        if (retryTimeoutRef.current) {
-            clearTimeout(retryTimeoutRef.current);
-            retryTimeoutRef.current = null;
-        }
 
         setPetrolEntries([]);
         setTrips([]);
@@ -246,6 +315,7 @@ function App() {
         setIsTracking(false);
         lastPositionRef.current = null;
         positionCountRef.current = 0;
+        positionHistoryRef.current = [];
 
         setGpsDebug({
             updates: 0,
@@ -253,7 +323,8 @@ function App() {
             lastLng: 0,
             accuracy: 0,
             speed: 0,
-            status: 'Not started'
+            status: 'Not started',
+            lastDistance: 0
         });
 
         localStorage.removeItem('petrolTrackerData');
@@ -324,20 +395,20 @@ function App() {
         setActiveScreen('dashboard');
     };
 
-    // START GPS WITH BETTER TIMEOUT HANDLING
     const startTrip = () => {
         console.log('\n🚀 ========== STARTING GPS ==========');
 
         if (!navigator.geolocation) {
-            alert('❌ GPS not supported on this device/browser');
+            alert('❌ GPS not supported');
             return;
         }
 
         // Reset
         positionCountRef.current = 0;
         lastPositionRef.current = null;
+        positionHistoryRef.current = [];
 
-        setGpsDebug(prev => ({ ...prev, status: 'Getting initial position...' }));
+        setGpsDebug(prev => ({ ...prev, status: 'Initializing GPS...' }));
 
         const newTrip = {
             id: Date.now(),
@@ -349,84 +420,81 @@ function App() {
         setCurrentTrip(newTrip);
         setIsTracking(true);
 
-        console.log('Requesting initial GPS lock...');
-        console.log('💡 TIP: Go outside for better signal!');
+        console.log('Getting initial GPS position...');
 
-        // Try to get initial position with longer timeout
         navigator.geolocation.getCurrentPosition(
             (position) => {
-                console.log('✅ Initial GPS lock successful!');
+                console.log('✅ GPS locked!');
                 console.log('Position:', position.coords);
 
                 lastPositionRef.current = {
                     lat: position.coords.latitude,
                     lng: position.coords.longitude,
-                    accuracy: position.coords.accuracy
+                    accuracy: position.coords.accuracy,
+                    speed: position.coords.speed || 0,
+                    timestamp: Date.now()
                 };
 
-                setGpsDebug(prev => ({ ...prev, status: 'GPS locked! Starting watch...' }));
+                positionHistoryRef.current = [lastPositionRef.current];
 
-                // Start continuous tracking with more lenient settings
-                console.log('Starting GPS watch...');
+                setGpsDebug(prev => ({ ...prev, status: 'GPS Active - Tracking movements' }));
+
+                console.log('Starting continuous GPS tracking...');
+                console.log('💡 Minimum 10m movement required to count');
 
                 watchIdRef.current = navigator.geolocation.watchPosition(
                     handlePositionUpdate,
                     handleGPSError,
                     {
                         enableHighAccuracy: true,
-                        timeout: 30000,        // Increased to 30 seconds
-                        maximumAge: 5000       // Allow cached position up to 5 seconds old
+                        timeout: 30000,
+                        maximumAge: 5000
                     }
                 );
 
-                console.log('✅ GPS watch started! ID:', watchIdRef.current);
-                showGpsMessage('🟢 GPS Active!', false);
-                setGpsDebug(prev => ({ ...prev, status: 'Tracking active ✓' }));
+                console.log('✅ Tracking started!');
+                showGpsMessage('🟢 GPS Active! Start moving!', false);
             },
             (error) => {
-                console.error('❌ Initial GPS lock failed:', error);
+                console.error('❌ GPS error:', error);
 
                 if (error.code === 3) {
-                    // Timeout - try with lower accuracy
-                    console.log('⚠️ Timeout with high accuracy. Trying with normal accuracy...');
-
-                    setGpsDebug(prev => ({ ...prev, status: 'Retrying with normal GPS...' }));
+                    console.log('Retrying with standard GPS...');
+                    setGpsDebug(prev => ({ ...prev, status: 'Retrying...' }));
 
                     navigator.geolocation.getCurrentPosition(
                         (position) => {
-                            console.log('✅ Got position with normal accuracy');
+                            console.log('✅ Got position (standard mode)');
 
                             lastPositionRef.current = {
                                 lat: position.coords.latitude,
                                 lng: position.coords.longitude,
-                                accuracy: position.coords.accuracy
+                                accuracy: position.coords.accuracy,
+                                speed: position.coords.speed || 0,
+                                timestamp: Date.now()
                             };
+
+                            positionHistoryRef.current = [lastPositionRef.current];
 
                             watchIdRef.current = navigator.geolocation.watchPosition(
                                 handlePositionUpdate,
                                 handleGPSError,
                                 {
-                                    enableHighAccuracy: false,  // Use normal GPS
+                                    enableHighAccuracy: false,
                                     timeout: 30000,
                                     maximumAge: 10000
                                 }
                             );
 
-                            showGpsMessage('🟡 GPS Active (Normal Mode)', false);
-                            setGpsDebug(prev => ({ ...prev, status: 'Active (Normal GPS) ✓' }));
+                            showGpsMessage('🟡 GPS Active (Standard)', false);
+                            setGpsDebug(prev => ({ ...prev, status: 'Active (Standard GPS)' }));
                         },
                         (retryError) => {
-                            console.error('❌ Retry also failed:', retryError);
+                            console.error('❌ Retry failed:', retryError);
                             handleGPSError(retryError);
                             setIsTracking(false);
                             setCurrentTrip(null);
-
-                            alert('❌ GPS Error\n\n' +
-                                'Could not get GPS signal.\n\n' +
-                                '✓ Make sure Location is ON\n' +
-                                '✓ Go outside for better signal\n' +
-                                '✓ Allow location permission\n' +
-                                '✓ Wait in one spot for 30 seconds');
+                            alert('❌ GPS Failed\n\nMake sure:\n✓ Location is ON\n✓ Permission allowed\n✓ You are outdoors');
                         },
                         {
                             enableHighAccuracy: false,
@@ -442,7 +510,7 @@ function App() {
             },
             {
                 enableHighAccuracy: true,
-                timeout: 20000,        // 20 second timeout for initial lock
+                timeout: 20000,
                 maximumAge: 0
             }
         );
@@ -454,11 +522,6 @@ function App() {
         if (watchIdRef.current) {
             navigator.geolocation.clearWatch(watchIdRef.current);
             watchIdRef.current = null;
-        }
-
-        if (retryTimeoutRef.current) {
-            clearTimeout(retryTimeoutRef.current);
-            retryTimeoutRef.current = null;
         }
 
         if (currentTrip) {
@@ -475,6 +538,7 @@ function App() {
 
         lastPositionRef.current = null;
         positionCountRef.current = 0;
+        positionHistoryRef.current = [];
         setIsTracking(false);
         setGpsDebug(prev => ({ ...prev, status: 'Stopped' }));
         showGpsMessage('⏸️ Tracking stopped', false);
@@ -519,7 +583,7 @@ function App() {
                     <div className="card install-prompt">
                         <h2>📱 Install App</h2>
                         <p style={{ color: '#93dac4', marginBottom: '15px' }}>
-                            Install on your home screen for offline use!
+                            Install on home screen for offline use!
                         </p>
                         <button className="btn btn-success" onClick={handleInstallClick}>
                             ⬇️ Install Now
@@ -539,7 +603,7 @@ function App() {
                     {petrolEntries.length === 0 ? (
                         <div className="empty-state">
                             <div className="empty-state-icon">⛽</div>
-                            <p>No petrol entry yet.<br />Add your first fill to start!</p>
+                            <p>No petrol entry yet.<br />Add your first fill!</p>
                         </div>
                     ) : (
                         <div className="stats-grid">
@@ -588,7 +652,7 @@ function App() {
                             🗑️ Reset All Data
                         </button>
                         <p style={{ color: '#93dac4', fontSize: '12px', marginTop: '10px', textAlign: 'center' }}>
-                            Deletes all entries and trip data
+                            Deletes all entries
                         </p>
                     </div>
                 )}
@@ -639,7 +703,7 @@ function App() {
 
                 {totalKmSinceLastFill > 0 && (
                     <div className="alert">
-                        📍 Distance covered: <strong>{totalKmSinceLastFill.toFixed(3)} km</strong>
+                        📍 Distance: <strong>{totalKmSinceLastFill.toFixed(3)} km</strong>
                     </div>
                 )}
 
@@ -659,7 +723,7 @@ function App() {
             <div className="card">
                 <h2>📍 GPS Trip Tracker</h2>
 
-                {/* GPS Status & Debug */}
+                {/* GPS Status */}
                 <div style={{
                     background: isTracking ? '#1a4d6d' : '#0f3460',
                     padding: '15px',
@@ -669,13 +733,13 @@ function App() {
                     fontSize: '13px'
                 }}>
                     <div style={{ color: '#4ecca3', fontWeight: 'bold', marginBottom: '8px' }}>
-                        📡 GPS Status: {gpsDebug.status}
+                        📡 {gpsDebug.status}
                     </div>
                     {isTracking && (
                         <div style={{ color: '#e8e8e8', fontFamily: 'monospace', fontSize: '12px' }}>
                             Updates: <span style={{ color: '#4ecca3' }}>{gpsDebug.updates}</span><br />
-                            Latitude: <span style={{ color: '#4ecca3' }}>{gpsDebug.lastLat.toFixed(6)}</span><br />
-                            Longitude: <span style={{ color: '#4ecca3' }}>{gpsDebug.lastLng.toFixed(6)}</span><br />
+                            Lat: <span style={{ color: '#4ecca3' }}>{gpsDebug.lastLat.toFixed(6)}</span><br />
+                            Lng: <span style={{ color: '#4ecca3' }}>{gpsDebug.lastLng.toFixed(6)}</span><br />
                             Accuracy: <span style={{ color: gpsDebug.accuracy < 20 ? '#4ecca3' : '#f4a261' }}>
                                 {gpsDebug.accuracy.toFixed(1)}m
                             </span><br />
@@ -685,12 +749,12 @@ function App() {
                 </div>
 
                 <div className="alert" style={{ marginBottom: '15px', backgroundColor: '#1a4d6d' }}>
-                    <strong>🎯 GPS Tips:</strong><br />
-                    ✓ Go OUTSIDE (indoors won't work)<br />
-                    ✓ Stand still for 30 seconds first<br />
-                    ✓ Clear view of sky (away from buildings)<br />
-                    ✓ Walk at least 50-100 meters<br />
-                    ✓ Keep app open while tracking
+                    <strong>🎯 For Accurate Tracking:</strong><br />
+                    ✓ Must move at least 10 meters<br />
+                    ✓ GPS accuracy must be good (&lt;30m)<br />
+                    ✓ Speed must indicate movement<br />
+                    ✓ Filters out GPS drift automatically<br />
+                    ✓ Works best outdoors
                 </div>
 
                 <div className={`trip-status ${isTracking ? 'tracking' : ''}`}>
@@ -722,6 +786,12 @@ function App() {
                         ⚠️ {gpsMessage}
                     </div>
                 )}
+
+                {isTracking && (
+                    <div className="alert" style={{ marginTop: '15px', fontSize: '12px', backgroundColor: '#0f3460' }}>
+                        💡 Check browser console (F12) to see why movements are counted or skipped
+                    </div>
+                )}
             </div>
         );
     };
@@ -733,7 +803,7 @@ function App() {
                 {petrolEntries.length === 0 ? (
                     <div className="empty-state">
                         <div className="empty-state-icon">📋</div>
-                        <p>No entries yet.<br />Add a petrol fill to start!</p>
+                        <p>No entries yet.<br />Add petrol to start!</p>
                     </div>
                 ) : (
                     <div>
@@ -779,13 +849,13 @@ function App() {
                 <div className="modal-overlay">
                     <div className="modal">
                         <h2>⚠️ Confirm Reset</h2>
-                        <p>Delete ALL data permanently?</p>
+                        <p>Delete ALL data?</p>
                         <p style={{ color: '#ee6c4d', fontSize: '14px', marginTop: '10px' }}>
-                            This cannot be undone!
+                            Cannot be undone!
                         </p>
                         <div className="modal-buttons">
                             <button className="btn btn-danger" onClick={confirmReset}>
-                                Yes, Delete Everything
+                                Yes, Delete
                             </button>
                             <button className="btn btn-secondary" onClick={cancelReset}>
                                 Cancel
@@ -797,7 +867,7 @@ function App() {
 
             <div className="header">
                 <h1>⛽ Petrol Tracker</h1>
-                <p>Track your bike's fuel efficiency</p>
+                <p>Track fuel efficiency</p>
             </div>
 
             <div className="container">

@@ -2,23 +2,56 @@
   "name": "Petrol Tracker - Bike Edition",
   "short_name": "Petrol Tracker",
   "description": "Track your bike's fuel efficiency with GPS",
-  "start_url": ".",
+  "start_url": "/",
   "display": "standalone",
   "background_color": "#1a1a2e",
   "theme_color": "#4ecca3",
-  "orientation": "portrait-primary",
+  "orientation": "portrait",
   "icons": [
     {
-      "src": "icon-192.png",
+      "src": "logo192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
-      "src": "icon-512.png",
+      "src": "logo512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "logo192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "categories": [ "productivity", "utilities" ],
+  "shortcuts": [
+    {
+      "name": "Add Fuel",
+      "short_name": "Fuel",
+      "description": "Add petrol entry",
+      "url": "/?screen=petrol",
+      "icons": [
+        {
+          "src": "logo192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Track GPS",
+      "short_name": "Track",
+      "description": "Start GPS tracking",
+      "url": "/?screen=gps",
+      "icons": [
+        {
+          "src": "logo192.png",
+          "sizes": "192x192"
+        }
+      ]
     }
   ]
 }

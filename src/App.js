@@ -19,6 +19,7 @@ function App() {
     const [deferredPrompt, setDeferredPrompt] = useState(null);
     const [showInstallPrompt, setShowInstallPrompt] = useState(false);
     const [showResetConfirm, setShowResetConfirm] = useState(false);
+    const [canInstall, setCanInstall] = useState(false);
 
     // GPS Debug Info
     const [gpsDebug, setGpsDebug] = useState({
@@ -35,7 +36,8 @@ function App() {
     const lastPositionRef = useRef(null);
     const isInitialMount = useRef(true);
     const positionCountRef = useRef(0);
-    const positionHistoryRef = useRef([]); // Track last few positions
+    const positionHistoryRef = useRef([]);
+    const isFirstPositionAfterStart = useRef(true); // NEW: Track first position
 
     const toRad = useCallback((degrees) => {
         return degrees * (Math.PI / 180);
@@ -94,7 +96,7 @@ function App() {
         showGpsMessage(message, true);
     }, [showGpsMessage]);
 
-    // IMPROVED GPS update with drift filtering
+    // FIXED: GPS update with proper first position handling
     const handlePositionUpdate = useCallback((position) => {
         positionCountRef.current += 1;
         const updateNum = positionCountRef.current;
@@ -116,7 +118,6 @@ function App() {
 
         // Add to position history
         positionHistoryRef.current.push(newPosition);
-        // Keep only last 5 positions
         if (positionHistoryRef.current.length > 5) {
             positionHistoryRef.current.shift();
         }
@@ -132,6 +133,16 @@ function App() {
             lastDistance: 0
         });
 
+        // FIXED: Skip the very first position update after starting
+        if (isFirstPositionAfterStart.current) {
+            console.log('ℹ️ First position after start - setting reference point (no distance counted)');
+            lastPositionRef.current = newPosition;
+            positionHistoryRef.current = [newPosition];
+            isFirstPositionAfterStart.current = false;
+            console.log('==========================================\n');
+            return;
+        }
+
         if (lastPositionRef.current) {
             const distance = calculateDistance(
                 lastPositionRef.current.lat,
@@ -143,35 +154,31 @@ function App() {
             const distanceMeters = distance * 1000;
             console.log('Distance from last:', distanceMeters.toFixed(2), 'm');
 
-            // IMPROVED FILTERING LOGIC
             let shouldUpdate = false;
             let reason = '';
 
-            // Filter 1: Minimum distance threshold (10 meters to avoid drift)
+            // Filter 1: Minimum distance (10m)
             if (distanceMeters < 10) {
                 reason = 'Distance < 10m (GPS drift)';
                 console.log('⏭️', reason);
             }
-            // Filter 2: Accuracy must be good (< 30 meters)
+            // Filter 2: Accuracy check
             else if (position.coords.accuracy > 30) {
-                reason = 'Accuracy too poor (>' + position.coords.accuracy.toFixed(0) + 'm)';
+                reason = 'Accuracy poor (' + position.coords.accuracy.toFixed(0) + 'm)';
                 console.log('⏭️', reason);
             }
-            // Filter 3: Check if speed indicates movement
+            // Filter 3: Speed check
             else if (position.coords.speed !== null && position.coords.speed < 0.5) {
-                // If speed is available and < 0.5 m/s (1.8 km/h), might be stationary
-                // But still allow if distance is significant (>15m)
                 if (distanceMeters < 15) {
-                    reason = 'Speed < 0.5 m/s and distance < 15m (likely stationary)';
+                    reason = 'Low speed and small distance';
                     console.log('⏭️', reason);
                 } else {
                     shouldUpdate = true;
                     reason = 'Distance significant despite low speed';
                 }
             }
-            // Filter 4: If we have multiple positions, check for consistent movement
+            // Filter 4: Consistent movement check
             else if (positionHistoryRef.current.length >= 3) {
-                // Calculate total distance over last 3 positions
                 let totalDistance = 0;
                 for (let i = 1; i < positionHistoryRef.current.length; i++) {
                     const prev = positionHistoryRef.current[i - 1];
@@ -179,29 +186,28 @@ function App() {
                     totalDistance += calculateDistance(prev.lat, prev.lng, curr.lat, curr.lng) * 1000;
                 }
 
-                console.log('Total distance over', positionHistoryRef.current.length, 'updates:', totalDistance.toFixed(2), 'm');
+                console.log('Total over', positionHistoryRef.current.length, 'points:', totalDistance.toFixed(2), 'm');
 
-                // If total distance over multiple updates is significant, it's real movement
                 if (totalDistance > 20) {
                     shouldUpdate = true;
-                    reason = 'Consistent movement detected';
+                    reason = 'Consistent movement';
                 } else if (distanceMeters > 20) {
                     shouldUpdate = true;
-                    reason = 'Single large movement';
+                    reason = 'Large single movement';
                 } else {
-                    reason = 'Total movement too small (GPS drift)';
+                    reason = 'Total movement too small (drift)';
                     console.log('⏭️', reason);
                 }
             }
-            // Filter 5: Large single movement (likely real)
+            // Filter 5: Large movement
             else if (distanceMeters > 20) {
                 shouldUpdate = true;
                 reason = 'Large movement detected';
             }
 
             if (shouldUpdate) {
-                console.log('✅ UPDATING DISTANCE -', reason);
-                console.log('Adding:', distanceMeters.toFixed(2), 'm (', distance.toFixed(6), 'km)');
+                console.log('✅ UPDATING -', reason);
+                console.log('Adding:', distanceMeters.toFixed(2), 'm');
 
                 setCurrentTrip(prev => {
                     if (!prev) return prev;
@@ -217,18 +223,14 @@ function App() {
                 });
 
                 setGpsDebug(prev => ({ ...prev, lastDistance: distanceMeters }));
-
-                // Update last position reference
                 lastPositionRef.current = newPosition;
-
-                // Clear position history after successful update
                 positionHistoryRef.current = [newPosition];
             } else {
                 console.log('⏭️ Skipped -', reason);
                 setGpsDebug(prev => ({ ...prev, lastDistance: 0 }));
             }
         } else {
-            console.log('ℹ️ First position - setting as reference');
+            console.log('ℹ️ Setting initial reference point');
             lastPositionRef.current = newPosition;
             positionHistoryRef.current = [newPosition];
         }
@@ -278,17 +280,24 @@ function App() {
         localStorage.setItem('petrolTrackerData', JSON.stringify(data));
     }, [petrolEntries, trips, currentTrip, totalKmSinceLastFill]);
 
+    // PWA Install Prompt
     useEffect(() => {
         const handler = (e) => {
             e.preventDefault();
+            console.log('Install prompt available');
             setDeferredPrompt(e);
+            setCanInstall(true);
             setShowInstallPrompt(true);
         };
 
         window.addEventListener('beforeinstallprompt', handler);
 
-        if (window.matchMedia('(display-mode: standalone)').matches) {
+        // Check if already installed
+        if (window.matchMedia('(display-mode: standalone)').matches ||
+            window.navigator.standalone === true) {
+            console.log('App is already installed');
             setShowInstallPrompt(false);
+            setCanInstall(false);
         }
 
         return () => window.removeEventListener('beforeinstallprompt', handler);
@@ -316,6 +325,7 @@ function App() {
         lastPositionRef.current = null;
         positionCountRef.current = 0;
         positionHistoryRef.current = [];
+        isFirstPositionAfterStart.current = true;
 
         setGpsDebug({
             updates: 0,
@@ -332,7 +342,7 @@ function App() {
         setShowResetConfirm(false);
         setActiveScreen('dashboard');
 
-        alert('✅ All data has been reset!');
+        alert('✅ All data reset!');
     };
 
     const cancelReset = () => {
@@ -341,14 +351,24 @@ function App() {
 
     const handleInstallClick = async () => {
         if (!deferredPrompt) {
+            // Fallback for iOS
+            if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
+                alert('To install:\n\n1. Tap Share button (⬆️)\n2. Tap "Add to Home Screen"\n3. Tap "Add"');
+                return;
+            }
+            alert('Install option not available. Try opening in Chrome or Safari.');
             return;
         }
 
-        deferredPrompt.prompt();
-        const { outcome } = await deferredPrompt.userChoice;
+        const promptEvent = deferredPrompt;
+        promptEvent.prompt();
+
+        const { outcome } = await promptEvent.userChoice;
+        console.log('Install outcome:', outcome);
 
         if (outcome === 'accepted') {
             setShowInstallPrompt(false);
+            setCanInstall(false);
         }
 
         setDeferredPrompt(null);
@@ -391,7 +411,7 @@ function App() {
         const today = new Date().toISOString().split('T')[0];
         setFillDate(today);
 
-        alert('✅ Petrol entry saved successfully!');
+        alert('✅ Petrol entry saved!');
         setActiveScreen('dashboard');
     };
 
@@ -403,12 +423,13 @@ function App() {
             return;
         }
 
-        // Reset
+        // RESET all counters and flags
         positionCountRef.current = 0;
         lastPositionRef.current = null;
         positionHistoryRef.current = [];
+        isFirstPositionAfterStart.current = true; // IMPORTANT: Reset first position flag
 
-        setGpsDebug(prev => ({ ...prev, status: 'Initializing GPS...' }));
+        setGpsDebug(prev => ({ ...prev, status: 'Getting GPS lock...' }));
 
         const newTrip = {
             id: Date.now(),
@@ -420,12 +441,12 @@ function App() {
         setCurrentTrip(newTrip);
         setIsTracking(true);
 
-        console.log('Getting initial GPS position...');
+        console.log('Requesting initial GPS position...');
 
         navigator.geolocation.getCurrentPosition(
             (position) => {
                 console.log('✅ GPS locked!');
-                console.log('Position:', position.coords);
+                console.log('Initial position:', position.coords);
 
                 lastPositionRef.current = {
                     lat: position.coords.latitude,
@@ -437,10 +458,11 @@ function App() {
 
                 positionHistoryRef.current = [lastPositionRef.current];
 
-                setGpsDebug(prev => ({ ...prev, status: 'GPS Active - Tracking movements' }));
+                setGpsDebug(prev => ({ ...prev, status: 'Tracking active - Move to start counting' }));
 
-                console.log('Starting continuous GPS tracking...');
-                console.log('💡 Minimum 10m movement required to count');
+                console.log('Starting GPS watch...');
+                console.log('💡 First position will be reference point (0 km)');
+                console.log('💡 Must move 10+ meters to count');
 
                 watchIdRef.current = navigator.geolocation.watchPosition(
                     handlePositionUpdate,
@@ -453,7 +475,7 @@ function App() {
                 );
 
                 console.log('✅ Tracking started!');
-                showGpsMessage('🟢 GPS Active! Start moving!', false);
+                showGpsMessage('🟢 GPS Active!', false);
             },
             (error) => {
                 console.error('❌ GPS error:', error);
@@ -464,7 +486,7 @@ function App() {
 
                     navigator.geolocation.getCurrentPosition(
                         (position) => {
-                            console.log('✅ Got position (standard mode)');
+                            console.log('✅ Position obtained (standard mode)');
 
                             lastPositionRef.current = {
                                 lat: position.coords.latitude,
@@ -494,7 +516,7 @@ function App() {
                             handleGPSError(retryError);
                             setIsTracking(false);
                             setCurrentTrip(null);
-                            alert('❌ GPS Failed\n\nMake sure:\n✓ Location is ON\n✓ Permission allowed\n✓ You are outdoors');
+                            alert('❌ GPS Failed\n\n✓ Enable Location\n✓ Allow permission\n✓ Go outdoors');
                         },
                         {
                             enableHighAccuracy: false,
@@ -539,6 +561,7 @@ function App() {
         lastPositionRef.current = null;
         positionCountRef.current = 0;
         positionHistoryRef.current = [];
+        isFirstPositionAfterStart.current = true;
         setIsTracking(false);
         setGpsDebug(prev => ({ ...prev, status: 'Stopped' }));
         showGpsMessage('⏸️ Tracking stopped', false);
@@ -579,24 +602,48 @@ function App() {
 
         return (
             <div>
-                {showInstallPrompt && (
+                {/* Install Prompt - IMPROVED */}
+                {showInstallPrompt && canInstall && (
                     <div className="card install-prompt">
                         <h2>📱 Install App</h2>
-                        <p style={{ color: '#93dac4', marginBottom: '15px' }}>
-                            Install on home screen for offline use!
+                        <p style={{ color: '#93dac4', marginBottom: '15px', fontSize: '14px' }}>
+                            Add to your home screen for easy access and offline use!
                         </p>
                         <button className="btn btn-success" onClick={handleInstallClick}>
-                            ⬇️ Install Now
+                            ⬇️ Install on Home Screen
                         </button>
                         <button
                             className="btn btn-secondary"
                             style={{ marginTop: '10px' }}
                             onClick={() => setShowInstallPrompt(false)}
                         >
-                            Maybe Later
+                            Later
                         </button>
                     </div>
                 )}
+
+                {/* Manual Install Instructions for iOS */}
+                {!canInstall && /iPhone|iPad|iPod/.test(navigator.userAgent) &&
+                    !window.navigator.standalone && showInstallPrompt && (
+                        <div className="card install-prompt">
+                            <h2>📱 Install on iPhone</h2>
+                            <div style={{ textAlign: 'left', color: '#93dac4', fontSize: '14px', lineHeight: '1.6' }}>
+                                <p style={{ marginBottom: '10px' }}>To install this app:</p>
+                                <ol style={{ paddingLeft: '20px' }}>
+                                    <li>Tap the Share button <strong>⬆️</strong> below</li>
+                                    <li>Scroll and tap <strong>"Add to Home Screen"</strong></li>
+                                    <li>Tap <strong>"Add"</strong> in the top right</li>
+                                </ol>
+                            </div>
+                            <button
+                                className="btn btn-secondary"
+                                style={{ marginTop: '15px' }}
+                                onClick={() => setShowInstallPrompt(false)}
+                            >
+                                Got it
+                            </button>
+                        </div>
+                    )}
 
                 <div className="card">
                     <h2>🏍️ Current Tank</h2>
@@ -608,15 +655,15 @@ function App() {
                     ) : (
                         <div className="stats-grid">
                             <div className="stat-box">
-                                <div className="stat-label">Litres Filled</div>
+                                <div className="stat-label">Litres</div>
                                 <div className="stat-value">{lastEntry.litres}<span className="stat-unit">L</span></div>
                             </div>
                             <div className="stat-box">
                                 <div className="stat-label">Distance</div>
-                                <div className="stat-value">{totalKmSinceLastFill.toFixed(3)}<span className="stat-unit">km</span></div>
+                                <div className="stat-value">{totalKmSinceLastFill.toFixed(2)}<span className="stat-unit">km</span></div>
                             </div>
                             <div className="stat-box full-width">
-                                <div className="stat-label">Current Mileage</div>
+                                <div className="stat-label">Mileage</div>
                                 <div className="stat-value large">{currentMileage}<span className="stat-unit">km/L</span></div>
                             </div>
                         </div>
@@ -627,16 +674,16 @@ function App() {
                     <h2>📊 This Month</h2>
                     <div className="stats-grid">
                         <div className="stat-box">
-                            <div className="stat-label">Total Litres</div>
-                            <div className="stat-value">{monthly.totalLitres.toFixed(2)}<span className="stat-unit">L</span></div>
+                            <div className="stat-label">Litres</div>
+                            <div className="stat-value">{monthly.totalLitres.toFixed(1)}<span className="stat-unit">L</span></div>
                         </div>
                         <div className="stat-box">
-                            <div className="stat-label">Total Spent</div>
-                            <div className="stat-value">₹{monthly.totalSpent.toFixed(2)}</div>
+                            <div className="stat-label">Spent</div>
+                            <div className="stat-value" style={{ fontSize: '20px' }}>₹{monthly.totalSpent.toFixed(0)}</div>
                         </div>
                         <div className="stat-box">
-                            <div className="stat-label">Total KM</div>
-                            <div className="stat-value">{monthly.totalKm.toFixed(2)}<span className="stat-unit">km</span></div>
+                            <div className="stat-label">Distance</div>
+                            <div className="stat-value">{monthly.totalKm.toFixed(0)}<span className="stat-unit">km</span></div>
                         </div>
                         <div className="stat-box">
                             <div className="stat-label">Avg Mileage</div>
@@ -663,7 +710,7 @@ function App() {
     const renderPetrolEntry = () => {
         return (
             <div className="card">
-                <h2>⛽ Add Petrol Entry</h2>
+                <h2>⛽ Add Petrol</h2>
 
                 <div className="input-group">
                     <label htmlFor="litres">Litres Filled</label>
@@ -675,6 +722,7 @@ function App() {
                         min="0"
                         value={litres}
                         onChange={(e) => setLitres(e.target.value)}
+                        inputMode="decimal"
                     />
                 </div>
 
@@ -688,6 +736,7 @@ function App() {
                         min="0"
                         value={pricePerLitre}
                         onChange={(e) => setPricePerLitre(e.target.value)}
+                        inputMode="decimal"
                     />
                 </div>
 
@@ -703,7 +752,7 @@ function App() {
 
                 {totalKmSinceLastFill > 0 && (
                     <div className="alert">
-                        📍 Distance: <strong>{totalKmSinceLastFill.toFixed(3)} km</strong>
+                        📍 Distance: <strong>{totalKmSinceLastFill.toFixed(2)} km</strong>
                     </div>
                 )}
 
@@ -716,80 +765,70 @@ function App() {
 
     const renderGPSTracker = () => {
         const currentTripKm = currentTrip && currentTrip.isActive
-            ? currentTrip.distance.toFixed(3)
-            : '0.000';
+            ? currentTrip.distance.toFixed(2)
+            : '0.00';
 
         return (
             <div className="card">
-                <h2>📍 GPS Trip Tracker</h2>
+                <h2>📍 GPS Tracker</h2>
 
-                {/* GPS Status */}
+                {/* GPS Status - Mobile Optimized */}
                 <div style={{
-                    background: isTracking ? '#1a4d6d' : '#0f3460',
-                    padding: '15px',
+                    background: isTracking ? 'linear-gradient(135deg, #1a4d6d 0%, #0f3460 100%)' : '#0f3460',
+                    padding: '12px',
                     borderRadius: '10px',
                     marginBottom: '15px',
                     border: `2px solid ${isTracking ? '#4ecca3' : '#1a4d6d'}`,
-                    fontSize: '13px'
+                    fontSize: '12px'
                 }}>
-                    <div style={{ color: '#4ecca3', fontWeight: 'bold', marginBottom: '8px' }}>
+                    <div style={{ color: '#4ecca3', fontWeight: 'bold', marginBottom: '6px', fontSize: '13px' }}>
                         📡 {gpsDebug.status}
                     </div>
                     {isTracking && (
-                        <div style={{ color: '#e8e8e8', fontFamily: 'monospace', fontSize: '12px' }}>
-                            Updates: <span style={{ color: '#4ecca3' }}>{gpsDebug.updates}</span><br />
-                            Lat: <span style={{ color: '#4ecca3' }}>{gpsDebug.lastLat.toFixed(6)}</span><br />
-                            Lng: <span style={{ color: '#4ecca3' }}>{gpsDebug.lastLng.toFixed(6)}</span><br />
+                        <div style={{ color: '#e8e8e8', fontFamily: 'monospace', fontSize: '11px', lineHeight: '1.5' }}>
+                            Updates: <span style={{ color: '#4ecca3' }}>{gpsDebug.updates}</span> |
                             Accuracy: <span style={{ color: gpsDebug.accuracy < 20 ? '#4ecca3' : '#f4a261' }}>
-                                {gpsDebug.accuracy.toFixed(1)}m
+                                {gpsDebug.accuracy.toFixed(0)}m
                             </span><br />
                             Speed: <span style={{ color: '#4ecca3' }}>{(gpsDebug.speed * 3.6).toFixed(1)} km/h</span>
                         </div>
                     )}
                 </div>
 
-                <div className="alert" style={{ marginBottom: '15px', backgroundColor: '#1a4d6d' }}>
-                    <strong>🎯 For Accurate Tracking:</strong><br />
-                    ✓ Must move at least 10 meters<br />
-                    ✓ GPS accuracy must be good (&lt;30m)<br />
-                    ✓ Speed must indicate movement<br />
-                    ✓ Filters out GPS drift automatically<br />
-                    ✓ Works best outdoors
+                <div className="alert" style={{ marginBottom: '15px', backgroundColor: '#1a4d6d', fontSize: '13px' }}>
+                    <strong>🎯 Tips:</strong><br />
+                    ✓ Go outdoors<br />
+                    ✓ Move 10+ meters to count<br />
+                    ✓ Starts from 0.00 km
                 </div>
 
                 <div className={`trip-status ${isTracking ? 'tracking' : ''}`}>
                     <div className="trip-label">CURRENT TRIP</div>
                     <div className="trip-distance">{currentTripKm}</div>
-                    <div className="trip-label">KILOMETERS</div>
+                    <div className="trip-label">KM</div>
                 </div>
 
                 <div className="trip-status">
-                    <div className="trip-label">TOTAL SINCE LAST FILL</div>
-                    <div className="trip-distance" style={{ fontSize: '36px' }}>
-                        {totalKmSinceLastFill.toFixed(3)}
+                    <div className="trip-label">TOTAL SINCE FILL</div>
+                    <div className="trip-distance" style={{ fontSize: '32px' }}>
+                        {totalKmSinceLastFill.toFixed(2)}
                     </div>
-                    <div className="trip-label">KILOMETERS</div>
+                    <div className="trip-label">KM</div>
                 </div>
 
                 {!isTracking ? (
                     <button className="btn btn-success btn-lg" onClick={startTrip}>
-                        ▶️ START TRACKING
+                        ▶️ START
                     </button>
                 ) : (
                     <button className="btn btn-danger btn-lg" onClick={stopTrip}>
-                        ⏹️ STOP TRACKING
+                        ⏹️ STOP
                     </button>
                 )}
 
                 {showGpsAlert && (
-                    <div className="alert alert-warning">
-                        ⚠️ {gpsMessage}
-                    </div>
-                )}
-
-                {isTracking && (
-                    <div className="alert" style={{ marginTop: '15px', fontSize: '12px', backgroundColor: '#0f3460' }}>
-                        💡 Check browser console (F12) to see why movements are counted or skipped
+                    <div className="alert alert-warning" style={{ marginTop: '15px' }}>
+                        {gpsMessage}
                     </div>
                 )}
             </div>
@@ -799,11 +838,11 @@ function App() {
     const renderHistory = () => {
         return (
             <div className="card">
-                <h2>📜 Fuel History</h2>
+                <h2>📜 History</h2>
                 {petrolEntries.length === 0 ? (
                     <div className="empty-state">
                         <div className="empty-state-icon">📋</div>
-                        <p>No entries yet.<br />Add petrol to start!</p>
+                        <p>No entries yet</p>
                     </div>
                 ) : (
                     <div>
@@ -828,10 +867,10 @@ function App() {
                                             Litres: <span>{entry.litres}L</span>
                                         </div>
                                         <div className="history-detail">
-                                            Cost: <span>₹{entry.totalCost.toFixed(2)}</span>
+                                            Cost: <span>₹{entry.totalCost.toFixed(0)}</span>
                                         </div>
                                         <div className="history-detail">
-                                            Distance: <span>{entry.kmTraveled.toFixed(3)} km</span>
+                                            Dist: <span>{entry.kmTraveled.toFixed(1)} km</span>
                                         </div>
                                     </div>
                                 </div>
@@ -849,7 +888,7 @@ function App() {
                 <div className="modal-overlay">
                     <div className="modal">
                         <h2>⚠️ Confirm Reset</h2>
-                        <p>Delete ALL data?</p>
+                        <p>Delete all data?</p>
                         <p style={{ color: '#ee6c4d', fontSize: '14px', marginTop: '10px' }}>
                             Cannot be undone!
                         </p>
@@ -883,14 +922,14 @@ function App() {
                     onClick={() => setActiveScreen('dashboard')}
                 >
                     <div className="nav-icon">🏠</div>
-                    <div>Dashboard</div>
+                    <div>Home</div>
                 </button>
                 <button
                     className={`nav-btn ${activeScreen === 'petrol' ? 'active' : ''}`}
                     onClick={() => setActiveScreen('petrol')}
                 >
                     <div className="nav-icon">⛽</div>
-                    <div>Add Fuel</div>
+                    <div>Fuel</div>
                 </button>
                 <button
                     className={`nav-btn ${activeScreen === 'gps' ? 'active' : ''}`}

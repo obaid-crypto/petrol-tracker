@@ -504,3 +504,96 @@
     .btn-secondary:active {
         transform: translateY(0);
     }
+
+/* Mobile-Specific Optimizations */
+@media (max-width: 768px) {
+    .container {
+        padding: 10px;
+    }
+
+    .card {
+        padding: 15px;
+        margin-bottom: 15px;
+    }
+
+        .card h2 {
+            font-size: 18px;
+        }
+
+    .stat-value {
+        font-size: 20px;
+    }
+
+        .stat-value.large {
+            font-size: 26px;
+        }
+
+    .trip-distance {
+        font-size: 40px;
+    }
+
+    .btn-lg {
+        padding: 20px;
+        font-size: 18px;
+    }
+
+    .input-group input {
+        font-size: 16px; /* Prevents zoom on iOS */
+    }
+
+    .bottom-nav {
+        padding: 8px 0;
+    }
+
+    .nav-btn {
+        padding: 8px 10px;
+        font-size: 11px;
+    }
+
+    .nav-icon {
+        font-size: 20px;
+    }
+}
+
+/* Prevent text selection (better mobile feel) */
+.nav-btn,
+.btn,
+.stat-box {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* Better touch targets */
+.btn {
+    min-height: 44px;
+    touch-action: manipulation;
+}
+
+/* Prevent zoom on input focus (iOS) */
+input {
+    font-size: 16px !important;
+}
+
+/* Better mobile scrolling */
+.container {
+    -webkit-overflow-scrolling: touch;
+    overflow-y: auto;
+}
+
+/* Install prompt mobile styling */
+.install-prompt {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    margin-bottom: 20px;
+}
+
+    .install-prompt h2 {
+        font-size: 18px;
+    }
+
+    .install-prompt p,
+    .install-prompt ol {
+        font-size: 13px;
+    }

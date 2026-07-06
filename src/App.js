@@ -21,7 +21,10 @@ function App() {
     const [showResetConfirm, setShowResetConfirm] = useState(false);
     const [canInstall, setCanInstall] = useState(false);
 
-    // GPS Debug Info
+    // Manual entry states
+    const [showManualEntry, setShowManualEntry] = useState(false);
+    const [manualKm, setManualKm] = useState('');
+
     const [gpsDebug, setGpsDebug] = useState({
         updates: 0,
         lastLat: 0,
@@ -37,7 +40,7 @@ function App() {
     const isInitialMount = useRef(true);
     const positionCountRef = useRef(0);
     const positionHistoryRef = useRef([]);
-    const isFirstPositionAfterStart = useRef(true); // NEW: Track first position
+    const isFirstPositionAfterStart = useRef(true);
 
     const toRad = useCallback((degrees) => {
         return degrees * (Math.PI / 180);
@@ -96,7 +99,6 @@ function App() {
         showGpsMessage(message, true);
     }, [showGpsMessage]);
 
-    // FIXED: GPS update with proper first position handling
     const handlePositionUpdate = useCallback((position) => {
         positionCountRef.current += 1;
         const updateNum = positionCountRef.current;
@@ -116,13 +118,11 @@ function App() {
             timestamp: Date.now()
         };
 
-        // Add to position history
         positionHistoryRef.current.push(newPosition);
         if (positionHistoryRef.current.length > 5) {
             positionHistoryRef.current.shift();
         }
 
-        // Update debug display
         setGpsDebug({
             updates: updateNum,
             lastLat: position.coords.latitude,
@@ -133,9 +133,8 @@ function App() {
             lastDistance: 0
         });
 
-        // FIXED: Skip the very first position update after starting
         if (isFirstPositionAfterStart.current) {
-            console.log('ℹ️ First position after start - setting reference point (no distance counted)');
+            console.log('ℹ️ First position after start - reference point');
             lastPositionRef.current = newPosition;
             positionHistoryRef.current = [newPosition];
             isFirstPositionAfterStart.current = false;
@@ -157,17 +156,14 @@ function App() {
             let shouldUpdate = false;
             let reason = '';
 
-            // Filter 1: Minimum distance (10m)
             if (distanceMeters < 10) {
                 reason = 'Distance < 10m (GPS drift)';
                 console.log('⏭️', reason);
             }
-            // Filter 2: Accuracy check
             else if (position.coords.accuracy > 30) {
                 reason = 'Accuracy poor (' + position.coords.accuracy.toFixed(0) + 'm)';
                 console.log('⏭️', reason);
             }
-            // Filter 3: Speed check
             else if (position.coords.speed !== null && position.coords.speed < 0.5) {
                 if (distanceMeters < 15) {
                     reason = 'Low speed and small distance';
@@ -177,7 +173,6 @@ function App() {
                     reason = 'Distance significant despite low speed';
                 }
             }
-            // Filter 4: Consistent movement check
             else if (positionHistoryRef.current.length >= 3) {
                 let totalDistance = 0;
                 for (let i = 1; i < positionHistoryRef.current.length; i++) {
@@ -199,7 +194,6 @@ function App() {
                     console.log('⏭️', reason);
                 }
             }
-            // Filter 5: Large movement
             else if (distanceMeters > 20) {
                 shouldUpdate = true;
                 reason = 'Large movement detected';
@@ -280,7 +274,6 @@ function App() {
         localStorage.setItem('petrolTrackerData', JSON.stringify(data));
     }, [petrolEntries, trips, currentTrip, totalKmSinceLastFill]);
 
-    // PWA Install Prompt
     useEffect(() => {
         const handler = (e) => {
             e.preventDefault();
@@ -292,7 +285,6 @@ function App() {
 
         window.addEventListener('beforeinstallprompt', handler);
 
-        // Check if already installed
         if (window.matchMedia('(display-mode: standalone)').matches ||
             window.navigator.standalone === true) {
             console.log('App is already installed');
@@ -351,7 +343,6 @@ function App() {
 
     const handleInstallClick = async () => {
         if (!deferredPrompt) {
-            // Fallback for iOS
             if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
                 alert('To install:\n\n1. Tap Share button (⬆️)\n2. Tap "Add to Home Screen"\n3. Tap "Add"');
                 return;
@@ -415,6 +406,55 @@ function App() {
         setActiveScreen('dashboard');
     };
 
+    // NEW: Manual KM Entry Functions
+    const handleManualEntryRequest = () => {
+        setShowManualEntry(true);
+    };
+
+    const saveManualKm = () => {
+        const kmNum = parseFloat(manualKm);
+
+        if (!kmNum || kmNum <= 0) {
+            alert('❌ Please enter valid kilometers!');
+            return;
+        }
+
+        if (kmNum > 1000) {
+            const confirm = window.confirm('⚠️ You entered ' + kmNum + ' km.\n\nThis seems very high. Continue?');
+            if (!confirm) return;
+        }
+
+        console.log('Adding manual KM:', kmNum);
+
+        setTotalKmSinceLastFill(prev => {
+            const newTotal = prev + kmNum;
+            console.log('Manual KM added:', prev.toFixed(2), '→', newTotal.toFixed(2), 'km');
+            return newTotal;
+        });
+
+        // Add to trips history
+        const manualTrip = {
+            id: Date.now(),
+            startTime: new Date().toISOString(),
+            endTime: new Date().toISOString(),
+            distance: kmNum,
+            isActive: false,
+            isManual: true
+        };
+
+        setTrips(prev => [...prev, manualTrip]);
+
+        setManualKm('');
+        setShowManualEntry(false);
+
+        alert('✅ ' + kmNum + ' km added to total!');
+    };
+
+    const cancelManualEntry = () => {
+        setManualKm('');
+        setShowManualEntry(false);
+    };
+
     const startTrip = () => {
         console.log('\n🚀 ========== STARTING GPS ==========');
 
@@ -423,11 +463,10 @@ function App() {
             return;
         }
 
-        // RESET all counters and flags
         positionCountRef.current = 0;
         lastPositionRef.current = null;
         positionHistoryRef.current = [];
-        isFirstPositionAfterStart.current = true; // IMPORTANT: Reset first position flag
+        isFirstPositionAfterStart.current = true;
 
         setGpsDebug(prev => ({ ...prev, status: 'Getting GPS lock...' }));
 
@@ -458,11 +497,10 @@ function App() {
 
                 positionHistoryRef.current = [lastPositionRef.current];
 
-                setGpsDebug(prev => ({ ...prev, status: 'Tracking active - Move to start counting' }));
+                setGpsDebug(prev => ({ ...prev, status: 'Tracking active' }));
 
                 console.log('Starting GPS watch...');
-                console.log('💡 First position will be reference point (0 km)');
-                console.log('💡 Must move 10+ meters to count');
+                console.log('💡 First position = reference (0 km)');
 
                 watchIdRef.current = navigator.geolocation.watchPosition(
                     handlePositionUpdate,
@@ -602,15 +640,14 @@ function App() {
 
         return (
             <div>
-                {/* Install Prompt - IMPROVED */}
                 {showInstallPrompt && canInstall && (
                     <div className="card install-prompt">
                         <h2>📱 Install App</h2>
                         <p style={{ color: '#93dac4', marginBottom: '15px', fontSize: '14px' }}>
-                            Add to your home screen for easy access and offline use!
+                            Add to home screen for offline use!
                         </p>
                         <button className="btn btn-success" onClick={handleInstallClick}>
-                            ⬇️ Install on Home Screen
+                            ⬇️ Install Now
                         </button>
                         <button
                             className="btn btn-secondary"
@@ -622,17 +659,16 @@ function App() {
                     </div>
                 )}
 
-                {/* Manual Install Instructions for iOS */}
                 {!canInstall && /iPhone|iPad|iPod/.test(navigator.userAgent) &&
                     !window.navigator.standalone && showInstallPrompt && (
                         <div className="card install-prompt">
                             <h2>📱 Install on iPhone</h2>
                             <div style={{ textAlign: 'left', color: '#93dac4', fontSize: '14px', lineHeight: '1.6' }}>
-                                <p style={{ marginBottom: '10px' }}>To install this app:</p>
+                                <p style={{ marginBottom: '10px' }}>To install:</p>
                                 <ol style={{ paddingLeft: '20px' }}>
-                                    <li>Tap the Share button <strong>⬆️</strong> below</li>
-                                    <li>Scroll and tap <strong>"Add to Home Screen"</strong></li>
-                                    <li>Tap <strong>"Add"</strong> in the top right</li>
+                                    <li>Tap Share button <strong>⬆️</strong></li>
+                                    <li>Tap <strong>"Add to Home Screen"</strong></li>
+                                    <li>Tap <strong>"Add"</strong></li>
                                 </ol>
                             </div>
                             <button
@@ -772,7 +808,6 @@ function App() {
             <div className="card">
                 <h2>📍 GPS Tracker</h2>
 
-                {/* GPS Status - Mobile Optimized */}
                 <div style={{
                     background: isTracking ? 'linear-gradient(135deg, #1a4d6d 0%, #0f3460 100%)' : '#0f3460',
                     padding: '12px',
@@ -796,10 +831,8 @@ function App() {
                 </div>
 
                 <div className="alert" style={{ marginBottom: '15px', backgroundColor: '#1a4d6d', fontSize: '13px' }}>
-                    <strong>🎯 Tips:</strong><br />
-                    ✓ Go outdoors<br />
-                    ✓ Move 10+ meters to count<br />
-                    ✓ Starts from 0.00 km
+                    <strong>📱 Keep app open while tracking</strong><br />
+                    GPS works best outdoors with clear sky view
                 </div>
 
                 <div className={`trip-status ${isTracking ? 'tracking' : ''}`}>
@@ -817,12 +850,21 @@ function App() {
                 </div>
 
                 {!isTracking ? (
-                    <button className="btn btn-success btn-lg" onClick={startTrip}>
-                        ▶️ START
-                    </button>
+                    <>
+                        <button className="btn btn-success btn-lg" onClick={startTrip}>
+                            ▶️ START GPS
+                        </button>
+                        <button
+                            className="btn btn-secondary btn-lg"
+                            style={{ marginTop: '10px' }}
+                            onClick={handleManualEntryRequest}
+                        >
+                            ✏️ ADD MANUAL KM
+                        </button>
+                    </>
                 ) : (
                     <button className="btn btn-danger btn-lg" onClick={stopTrip}>
-                        ⏹️ STOP
+                        ⏹️ STOP GPS
                     </button>
                 )}
 
@@ -884,6 +926,48 @@ function App() {
 
     return (
         <div className="App">
+            {/* Manual KM Entry Modal */}
+            {showManualEntry && (
+                <div className="modal-overlay">
+                    <div className="modal">
+                        <h2>✏️ Add Manual KM</h2>
+                        <p style={{ color: '#93dac4', fontSize: '14px', marginBottom: '15px' }}>
+                            Enter distance traveled when someone else rode the bike
+                        </p>
+
+                        <div className="input-group">
+                            <label htmlFor="manualKm">Kilometers Traveled</label>
+                            <input
+                                type="number"
+                                id="manualKm"
+                                placeholder="Enter km"
+                                step="0.1"
+                                min="0"
+                                value={manualKm}
+                                onChange={(e) => setManualKm(e.target.value)}
+                                inputMode="decimal"
+                                autoFocus
+                                style={{
+                                    fontSize: '18px',
+                                    padding: '15px',
+                                    textAlign: 'center'
+                                }}
+                            />
+                        </div>
+
+                        <div className="modal-buttons">
+                            <button className="btn btn-success" onClick={saveManualKm}>
+                                ✅ Add KM
+                            </button>
+                            <button className="btn btn-secondary" onClick={cancelManualEntry}>
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Reset Confirm Modal */}
             {showResetConfirm && (
                 <div className="modal-overlay">
                     <div className="modal">

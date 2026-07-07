@@ -594,75 +594,67 @@ function App() {
         return { totalLitres, totalSpent, totalKm, avgMileage };
     };
 
-    // NEW: Speedometer Component
+    // SPEEDOMETER - FIXED: Green→Yellow→Red (0→60→120 km/h)
     const renderSpeedometer = () => {
         const speedKmh = gpsDebug.speed * 3.6; // Convert m/s to km/h
         const maxSpeed = 120; // Max scale
-        const speedPercentage = Math.min((speedKmh / maxSpeed) * 100, 100);
-        const rotation = (speedPercentage / 100) * 270 - 135; // -135 to 135 degrees
+        const clampedSpeed = Math.max(0, Math.min(speedKmh, maxSpeed));
+        const speedPercentage = (clampedSpeed / maxSpeed) * 100;
+
+        // Needle rotation: -135deg (0 km/h) to +135deg (120 km/h)
+        const rotation = -135 + (speedPercentage / 100) * 270;
 
         return (
             <div className="speedometer-container">
-                <svg className="speedometer" viewBox="0 0 200 200">
-                    {/* Background Circle */}
-                    <circle
-                        cx="100"
-                        cy="100"
-                        r="80"
-                        fill="none"
-                        stroke="#1a4d6d"
-                        strokeWidth="2"
-                    />
-
-                    {/* Gradient Arc */}
+                <svg className="speedometer" viewBox="0 0 220 180">
+                    {/* Gradient Definition - REVERSED: Green→Yellow→Red */}
                     <defs>
                         <linearGradient id="speedGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                            <stop offset="0%" stopColor="#ee6c4d" />
+                            <stop offset="0%" stopColor="#4ecca3" />
                             <stop offset="50%" stopColor="#f4a261" />
-                            <stop offset="100%" stopColor="#4ecca3" />
+                            <stop offset="100%" stopColor="#ee6c4d" />
                         </linearGradient>
                     </defs>
 
-                    {/* Speed Arc */}
-                    <circle
-                        cx="100"
-                        cy="100"
-                        r="70"
+                    {/* Background Arc - Dark */}
+                    <path
+                        d="M 35 110 A 75 75 0 1 1 185 110"
                         fill="none"
-                        stroke="url(#speedGradient)"
-                        strokeWidth="12"
+                        stroke="#1a4d6d"
+                        strokeWidth="18"
                         strokeLinecap="round"
-                        strokeDasharray={`${(270 / 360) * 2 * Math.PI * 70} ${2 * Math.PI * 70}`}
-                        strokeDashoffset={`${2 * Math.PI * 70 * 0.25}`}
-                        transform="rotate(135 100 100)"
                     />
 
-                    {/* Speed Markers */}
+                    {/* Colored Arc - Green→Yellow→Red */}
+                    <path
+                        d="M 35 110 A 75 75 0 1 1 185 110"
+                        fill="none"
+                        stroke="url(#speedGradient)"
+                        strokeWidth="14"
+                        strokeLinecap="round"
+                    />
+
+                    {/* Speed Markers and Numbers */}
                     {[0, 20, 40, 60, 80, 100, 120].map((speed, i) => {
                         const angle = -135 + (i * 45);
                         const rad = (angle * Math.PI) / 180;
-                        const x1 = 100 + 65 * Math.cos(rad);
-                        const y1 = 100 + 65 * Math.sin(rad);
-                        const x2 = 100 + 75 * Math.cos(rad);
-                        const y2 = 100 + 75 * Math.sin(rad);
-                        const textX = 100 + 85 * Math.cos(rad);
-                        const textY = 100 + 85 * Math.sin(rad);
+                        const radius = 75;
+                        const x = 110 + radius * Math.cos(rad);
+                        const y = 110 + radius * Math.sin(rad);
+
+                        const textRadius = 95;
+                        const textX = 110 + textRadius * Math.cos(rad);
+                        const textY = 110 + textRadius * Math.sin(rad);
 
                         return (
                             <g key={speed}>
-                                <line
-                                    x1={x1}
-                                    y1={y1}
-                                    x2={x2}
-                                    y2={y2}
-                                    stroke="#93dac4"
-                                    strokeWidth="2"
-                                />
+                                <circle cx={x} cy={y} r="3" fill="#93dac4" />
                                 <text
                                     x={textX}
                                     y={textY}
                                     fill="#93dac4"
-                                    fontSize="10"
+                                    fontSize="12"
+                                    fontWeight="bold"
                                     textAnchor="middle"
                                     dominantBaseline="middle"
                                 >
@@ -673,25 +665,26 @@ function App() {
                     })}
 
                     {/* Needle */}
-                    <g transform={`rotate(${rotation} 100 100)`}>
+                    <g transform={`rotate(${rotation} 110 110)`}>
                         <line
-                            x1="100"
-                            y1="100"
-                            x2="100"
-                            y2="35"
+                            x1="110"
+                            y1="110"
+                            x2="110"
+                            y2="45"
                             stroke="#4ecca3"
-                            strokeWidth="3"
+                            strokeWidth="4"
                             strokeLinecap="round"
+                            filter="drop-shadow(0 2px 4px rgba(0,0,0,0.5))"
                         />
-                        <circle cx="100" cy="100" r="8" fill="#4ecca3" />
+                        <circle cx="110" cy="110" r="10" fill="#4ecca3" />
                     </g>
 
-                    {/* Center Dot */}
-                    <circle cx="100" cy="100" r="4" fill="#0f3460" />
+                    <circle cx="110" cy="110" r="6" fill="#0f3460" />
                 </svg>
 
+                {/* Speed Display - Below Speedometer */}
                 <div className="speedometer-value">
-                    <div className="speed-number">{speedKmh.toFixed(1)}</div>
+                    <div className="speed-number">{clampedSpeed.toFixed(1)}</div>
                     <div className="speed-unit">km/h</div>
                 </div>
             </div>
@@ -853,7 +846,7 @@ function App() {
             <div className="card">
                 <h2>📍 GPS Tracker</h2>
 
-                {/* Speedometer - NEW */}
+                {/* Speedometer */}
                 {isTracking && renderSpeedometer()}
 
                 <div style={{

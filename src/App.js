@@ -21,7 +21,6 @@ function App() {
     const [showResetConfirm, setShowResetConfirm] = useState(false);
     const [canInstall, setCanInstall] = useState(false);
 
-    // Manual entry states
     const [showManualEntry, setShowManualEntry] = useState(false);
     const [manualKm, setManualKm] = useState('');
 
@@ -277,7 +276,6 @@ function App() {
     useEffect(() => {
         const handler = (e) => {
             e.preventDefault();
-            console.log('Install prompt available');
             setDeferredPrompt(e);
             setCanInstall(true);
             setShowInstallPrompt(true);
@@ -287,7 +285,6 @@ function App() {
 
         if (window.matchMedia('(display-mode: standalone)').matches ||
             window.navigator.standalone === true) {
-            console.log('App is already installed');
             setShowInstallPrompt(false);
             setCanInstall(false);
         }
@@ -347,7 +344,7 @@ function App() {
                 alert('To install:\n\n1. Tap Share button (⬆️)\n2. Tap "Add to Home Screen"\n3. Tap "Add"');
                 return;
             }
-            alert('Install option not available. Try opening in Chrome or Safari.');
+            alert('Install option not available. Try Chrome or Safari.');
             return;
         }
 
@@ -355,7 +352,6 @@ function App() {
         promptEvent.prompt();
 
         const { outcome } = await promptEvent.userChoice;
-        console.log('Install outcome:', outcome);
 
         if (outcome === 'accepted') {
             setShowInstallPrompt(false);
@@ -406,7 +402,6 @@ function App() {
         setActiveScreen('dashboard');
     };
 
-    // NEW: Manual KM Entry Functions
     const handleManualEntryRequest = () => {
         setShowManualEntry(true);
     };
@@ -424,15 +419,8 @@ function App() {
             if (!confirm) return;
         }
 
-        console.log('Adding manual KM:', kmNum);
+        setTotalKmSinceLastFill(prev => prev + kmNum);
 
-        setTotalKmSinceLastFill(prev => {
-            const newTotal = prev + kmNum;
-            console.log('Manual KM added:', prev.toFixed(2), '→', newTotal.toFixed(2), 'km');
-            return newTotal;
-        });
-
-        // Add to trips history
         const manualTrip = {
             id: Date.now(),
             startTime: new Date().toISOString(),
@@ -447,7 +435,7 @@ function App() {
         setManualKm('');
         setShowManualEntry(false);
 
-        alert('✅ ' + kmNum + ' km added to total!');
+        alert('✅ ' + kmNum + ' km added!');
     };
 
     const cancelManualEntry = () => {
@@ -456,8 +444,6 @@ function App() {
     };
 
     const startTrip = () => {
-        console.log('\n🚀 ========== STARTING GPS ==========');
-
         if (!navigator.geolocation) {
             alert('❌ GPS not supported');
             return;
@@ -480,13 +466,8 @@ function App() {
         setCurrentTrip(newTrip);
         setIsTracking(true);
 
-        console.log('Requesting initial GPS position...');
-
         navigator.geolocation.getCurrentPosition(
             (position) => {
-                console.log('✅ GPS locked!');
-                console.log('Initial position:', position.coords);
-
                 lastPositionRef.current = {
                     lat: position.coords.latitude,
                     lng: position.coords.longitude,
@@ -496,11 +477,7 @@ function App() {
                 };
 
                 positionHistoryRef.current = [lastPositionRef.current];
-
-                setGpsDebug(prev => ({ ...prev, status: 'Tracking active' }));
-
-                console.log('Starting GPS watch...');
-                console.log('💡 First position = reference (0 km)');
+                setGpsDebug(prev => ({ ...prev, status: 'Tracking active', speed: position.coords.speed || 0 }));
 
                 watchIdRef.current = navigator.geolocation.watchPosition(
                     handlePositionUpdate,
@@ -512,20 +489,12 @@ function App() {
                     }
                 );
 
-                console.log('✅ Tracking started!');
                 showGpsMessage('🟢 GPS Active!', false);
             },
             (error) => {
-                console.error('❌ GPS error:', error);
-
                 if (error.code === 3) {
-                    console.log('Retrying with standard GPS...');
-                    setGpsDebug(prev => ({ ...prev, status: 'Retrying...' }));
-
                     navigator.geolocation.getCurrentPosition(
                         (position) => {
-                            console.log('✅ Position obtained (standard mode)');
-
                             lastPositionRef.current = {
                                 lat: position.coords.latitude,
                                 lng: position.coords.longitude,
@@ -546,15 +515,14 @@ function App() {
                                 }
                             );
 
-                            showGpsMessage('🟡 GPS Active (Standard)', false);
-                            setGpsDebug(prev => ({ ...prev, status: 'Active (Standard GPS)' }));
+                            showGpsMessage('🟡 GPS Active', false);
+                            setGpsDebug(prev => ({ ...prev, status: 'Active (Standard)' }));
                         },
                         (retryError) => {
-                            console.error('❌ Retry failed:', retryError);
                             handleGPSError(retryError);
                             setIsTracking(false);
                             setCurrentTrip(null);
-                            alert('❌ GPS Failed\n\n✓ Enable Location\n✓ Allow permission\n✓ Go outdoors');
+                            alert('❌ GPS Failed\n\nEnable Location & go outdoors');
                         },
                         {
                             enableHighAccuracy: false,
@@ -577,8 +545,6 @@ function App() {
     };
 
     const stopTrip = () => {
-        console.log('\n⏹️ ========== STOPPING GPS ==========');
-
         if (watchIdRef.current) {
             navigator.geolocation.clearWatch(watchIdRef.current);
             watchIdRef.current = null;
@@ -591,7 +557,6 @@ function App() {
                 isActive: false
             };
 
-            console.log('Trip completed:', completedTrip);
             setTrips(prev => [...prev, completedTrip]);
             setCurrentTrip(null);
         }
@@ -601,10 +566,8 @@ function App() {
         positionHistoryRef.current = [];
         isFirstPositionAfterStart.current = true;
         setIsTracking(false);
-        setGpsDebug(prev => ({ ...prev, status: 'Stopped' }));
-        showGpsMessage('⏸️ Tracking stopped', false);
-
-        console.log('Final Total:', totalKmSinceLastFill.toFixed(3), 'km');
+        setGpsDebug(prev => ({ ...prev, status: 'Stopped', speed: 0 }));
+        showGpsMessage('⏸️ Stopped', false);
     };
 
     const getMonthlySummary = () => {
@@ -631,6 +594,110 @@ function App() {
         return { totalLitres, totalSpent, totalKm, avgMileage };
     };
 
+    // NEW: Speedometer Component
+    const renderSpeedometer = () => {
+        const speedKmh = gpsDebug.speed * 3.6; // Convert m/s to km/h
+        const maxSpeed = 120; // Max scale
+        const speedPercentage = Math.min((speedKmh / maxSpeed) * 100, 100);
+        const rotation = (speedPercentage / 100) * 270 - 135; // -135 to 135 degrees
+
+        return (
+            <div className="speedometer-container">
+                <svg className="speedometer" viewBox="0 0 200 200">
+                    {/* Background Circle */}
+                    <circle
+                        cx="100"
+                        cy="100"
+                        r="80"
+                        fill="none"
+                        stroke="#1a4d6d"
+                        strokeWidth="2"
+                    />
+
+                    {/* Gradient Arc */}
+                    <defs>
+                        <linearGradient id="speedGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                            <stop offset="0%" stopColor="#ee6c4d" />
+                            <stop offset="50%" stopColor="#f4a261" />
+                            <stop offset="100%" stopColor="#4ecca3" />
+                        </linearGradient>
+                    </defs>
+
+                    {/* Speed Arc */}
+                    <circle
+                        cx="100"
+                        cy="100"
+                        r="70"
+                        fill="none"
+                        stroke="url(#speedGradient)"
+                        strokeWidth="12"
+                        strokeLinecap="round"
+                        strokeDasharray={`${(270 / 360) * 2 * Math.PI * 70} ${2 * Math.PI * 70}`}
+                        strokeDashoffset={`${2 * Math.PI * 70 * 0.25}`}
+                        transform="rotate(135 100 100)"
+                    />
+
+                    {/* Speed Markers */}
+                    {[0, 20, 40, 60, 80, 100, 120].map((speed, i) => {
+                        const angle = -135 + (i * 45);
+                        const rad = (angle * Math.PI) / 180;
+                        const x1 = 100 + 65 * Math.cos(rad);
+                        const y1 = 100 + 65 * Math.sin(rad);
+                        const x2 = 100 + 75 * Math.cos(rad);
+                        const y2 = 100 + 75 * Math.sin(rad);
+                        const textX = 100 + 85 * Math.cos(rad);
+                        const textY = 100 + 85 * Math.sin(rad);
+
+                        return (
+                            <g key={speed}>
+                                <line
+                                    x1={x1}
+                                    y1={y1}
+                                    x2={x2}
+                                    y2={y2}
+                                    stroke="#93dac4"
+                                    strokeWidth="2"
+                                />
+                                <text
+                                    x={textX}
+                                    y={textY}
+                                    fill="#93dac4"
+                                    fontSize="10"
+                                    textAnchor="middle"
+                                    dominantBaseline="middle"
+                                >
+                                    {speed}
+                                </text>
+                            </g>
+                        );
+                    })}
+
+                    {/* Needle */}
+                    <g transform={`rotate(${rotation} 100 100)`}>
+                        <line
+                            x1="100"
+                            y1="100"
+                            x2="100"
+                            y2="35"
+                            stroke="#4ecca3"
+                            strokeWidth="3"
+                            strokeLinecap="round"
+                        />
+                        <circle cx="100" cy="100" r="8" fill="#4ecca3" />
+                    </g>
+
+                    {/* Center Dot */}
+                    <circle cx="100" cy="100" r="4" fill="#0f3460" />
+                </svg>
+
+                <div className="speedometer-value">
+                    <div className="speed-number">{speedKmh.toFixed(1)}</div>
+                    <div className="speed-unit">km/h</div>
+                </div>
+            </div>
+        );
+    };
+
     const renderDashboard = () => {
         const monthly = getMonthlySummary();
         const lastEntry = petrolEntries[0];
@@ -644,10 +711,10 @@ function App() {
                     <div className="card install-prompt">
                         <h2>📱 Install App</h2>
                         <p style={{ color: '#93dac4', marginBottom: '15px', fontSize: '14px' }}>
-                            Add to home screen for offline use!
+                            Add to home screen!
                         </p>
                         <button className="btn btn-success" onClick={handleInstallClick}>
-                            ⬇️ Install Now
+                            ⬇️ Install
                         </button>
                         <button
                             className="btn btn-secondary"
@@ -659,34 +726,12 @@ function App() {
                     </div>
                 )}
 
-                {!canInstall && /iPhone|iPad|iPod/.test(navigator.userAgent) &&
-                    !window.navigator.standalone && showInstallPrompt && (
-                        <div className="card install-prompt">
-                            <h2>📱 Install on iPhone</h2>
-                            <div style={{ textAlign: 'left', color: '#93dac4', fontSize: '14px', lineHeight: '1.6' }}>
-                                <p style={{ marginBottom: '10px' }}>To install:</p>
-                                <ol style={{ paddingLeft: '20px' }}>
-                                    <li>Tap Share button <strong>⬆️</strong></li>
-                                    <li>Tap <strong>"Add to Home Screen"</strong></li>
-                                    <li>Tap <strong>"Add"</strong></li>
-                                </ol>
-                            </div>
-                            <button
-                                className="btn btn-secondary"
-                                style={{ marginTop: '15px' }}
-                                onClick={() => setShowInstallPrompt(false)}
-                            >
-                                Got it
-                            </button>
-                        </div>
-                    )}
-
                 <div className="card">
                     <h2>🏍️ Current Tank</h2>
                     {petrolEntries.length === 0 ? (
                         <div className="empty-state">
                             <div className="empty-state-icon">⛽</div>
-                            <p>No petrol entry yet.<br />Add your first fill!</p>
+                            <p>No petrol entry yet!</p>
                         </div>
                     ) : (
                         <div className="stats-grid">
@@ -808,6 +853,9 @@ function App() {
             <div className="card">
                 <h2>📍 GPS Tracker</h2>
 
+                {/* Speedometer - NEW */}
+                {isTracking && renderSpeedometer()}
+
                 <div style={{
                     background: isTracking ? 'linear-gradient(135deg, #1a4d6d 0%, #0f3460 100%)' : '#0f3460',
                     padding: '12px',
@@ -824,29 +872,21 @@ function App() {
                             Updates: <span style={{ color: '#4ecca3' }}>{gpsDebug.updates}</span> |
                             Accuracy: <span style={{ color: gpsDebug.accuracy < 20 ? '#4ecca3' : '#f4a261' }}>
                                 {gpsDebug.accuracy.toFixed(0)}m
-                            </span><br />
-                            Speed: <span style={{ color: '#4ecca3' }}>{(gpsDebug.speed * 3.6).toFixed(1)} km/h</span>
+                            </span>
                         </div>
                     )}
                 </div>
 
-                <div className="alert" style={{ marginBottom: '15px', backgroundColor: '#1a4d6d', fontSize: '13px' }}>
-                    <strong>📱 Keep app open while tracking</strong><br />
-                    GPS works best outdoors with clear sky view
-                </div>
-
-                <div className={`trip-status ${isTracking ? 'tracking' : ''}`}>
-                    <div className="trip-label">CURRENT TRIP</div>
-                    <div className="trip-distance">{currentTripKm}</div>
-                    <div className="trip-label">KM</div>
-                </div>
-
-                <div className="trip-status">
-                    <div className="trip-label">TOTAL SINCE FILL</div>
-                    <div className="trip-distance" style={{ fontSize: '32px' }}>
-                        {totalKmSinceLastFill.toFixed(2)}
+                <div className="trip-status-grid">
+                    <div className={`trip-status-compact ${isTracking ? 'tracking' : ''}`}>
+                        <div className="trip-label-small">CURRENT TRIP</div>
+                        <div className="trip-value-small">{currentTripKm} km</div>
                     </div>
-                    <div className="trip-label">KM</div>
+
+                    <div className="trip-status-compact">
+                        <div className="trip-label-small">TOTAL</div>
+                        <div className="trip-value-small">{totalKmSinceLastFill.toFixed(2)} km</div>
+                    </div>
                 </div>
 
                 {!isTracking ? (
@@ -926,17 +966,16 @@ function App() {
 
     return (
         <div className="App">
-            {/* Manual KM Entry Modal */}
             {showManualEntry && (
                 <div className="modal-overlay">
                     <div className="modal">
                         <h2>✏️ Add Manual KM</h2>
                         <p style={{ color: '#93dac4', fontSize: '14px', marginBottom: '15px' }}>
-                            Enter distance traveled when someone else rode the bike
+                            Enter distance when someone else rode
                         </p>
 
                         <div className="input-group">
-                            <label htmlFor="manualKm">Kilometers Traveled</label>
+                            <label htmlFor="manualKm">Kilometers</label>
                             <input
                                 type="number"
                                 id="manualKm"
@@ -947,11 +986,7 @@ function App() {
                                 onChange={(e) => setManualKm(e.target.value)}
                                 inputMode="decimal"
                                 autoFocus
-                                style={{
-                                    fontSize: '18px',
-                                    padding: '15px',
-                                    textAlign: 'center'
-                                }}
+                                style={{ fontSize: '18px', padding: '15px', textAlign: 'center' }}
                             />
                         </div>
 
@@ -967,7 +1002,6 @@ function App() {
                 </div>
             )}
 
-            {/* Reset Confirm Modal */}
             {showResetConfirm && (
                 <div className="modal-overlay">
                     <div className="modal">

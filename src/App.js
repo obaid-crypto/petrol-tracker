@@ -594,66 +594,96 @@ function App() {
         return { totalLitres, totalSpent, totalKm, avgMileage };
     };
 
-    // SPEEDOMETER - FIXED: Green→Yellow→Red (0→60→120 km/h)
+    // SPEEDOMETER COMPONENT - COMPLETE & FIXED
     const renderSpeedometer = () => {
         const speedKmh = gpsDebug.speed * 3.6; // Convert m/s to km/h
         const maxSpeed = 120; // Max scale
         const clampedSpeed = Math.max(0, Math.min(speedKmh, maxSpeed));
         const speedPercentage = (clampedSpeed / maxSpeed) * 100;
 
-        // Needle rotation: -135deg (0 km/h) to +135deg (120 km/h)
-        const rotation = -135 + (speedPercentage / 100) * 270;
+        // Needle rotation: 225deg (0 km/h at bottom-left) to 495deg (120 km/h at bottom-right)
+        const rotation = 225 + (speedPercentage / 100) * 270;
 
         return (
             <div className="speedometer-container">
-                <svg className="speedometer" viewBox="0 0 220 180">
-                    {/* Gradient Definition - REVERSED: Green→Yellow→Red */}
+                <svg className="speedometer" viewBox="0 0 240 200">
+                    {/* Gradient Definition - Green→Yellow→Red */}
                     <defs>
-                        <linearGradient id="speedGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                        <linearGradient id="speedGradient">
                             <stop offset="0%" stopColor="#4ecca3" />
                             <stop offset="50%" stopColor="#f4a261" />
                             <stop offset="100%" stopColor="#ee6c4d" />
                         </linearGradient>
+
+                        {/* Glow effect */}
+                        <filter id="glow">
+                            <feGaussianBlur stdDeviation="2" result="coloredBlur" />
+                            <feMerge>
+                                <feMergeNode in="coloredBlur" />
+                                <feMergeNode in="SourceGraphic" />
+                            </feMerge>
+                        </filter>
                     </defs>
 
-                    {/* Background Arc - Dark */}
-                    <path
-                        d="M 35 110 A 75 75 0 1 1 185 110"
+                    {/* Background Circle (full) */}
+                    <circle
+                        cx="120"
+                        cy="120"
+                        r="90"
                         fill="none"
                         stroke="#1a4d6d"
-                        strokeWidth="18"
-                        strokeLinecap="round"
+                        strokeWidth="20"
                     />
 
-                    {/* Colored Arc - Green→Yellow→Red */}
+                    {/* Colored Arc - 270 degrees from bottom-left to bottom-right */}
                     <path
-                        d="M 35 110 A 75 75 0 1 1 185 110"
+                        d="M 56.36 183.64 A 90 90 0 1 1 183.64 183.64"
                         fill="none"
                         stroke="url(#speedGradient)"
-                        strokeWidth="14"
+                        strokeWidth="16"
                         strokeLinecap="round"
                     />
 
-                    {/* Speed Markers and Numbers */}
-                    {[0, 20, 40, 60, 80, 100, 120].map((speed, i) => {
-                        const angle = -135 + (i * 45);
+                    {/* Speed Markers - 0, 20, 40, 60, 80, 100, 120 */}
+                    {[
+                        { speed: 0, angle: 225 },
+                        { speed: 20, angle: 270 },
+                        { speed: 40, angle: 315 },
+                        { speed: 60, angle: 0 },
+                        { speed: 80, angle: 45 },
+                        { speed: 100, angle: 90 },
+                        { speed: 120, angle: 135 }
+                    ].map(({ speed, angle }) => {
                         const rad = (angle * Math.PI) / 180;
-                        const radius = 75;
-                        const x = 110 + radius * Math.cos(rad);
-                        const y = 110 + radius * Math.sin(rad);
+                        const innerRadius = 75;
+                        const outerRadius = 85;
+                        const textRadius = 100;
 
-                        const textRadius = 95;
-                        const textX = 110 + textRadius * Math.cos(rad);
-                        const textY = 110 + textRadius * Math.sin(rad);
+                        const x1 = 120 + innerRadius * Math.cos(rad);
+                        const y1 = 120 + innerRadius * Math.sin(rad);
+                        const x2 = 120 + outerRadius * Math.cos(rad);
+                        const y2 = 120 + outerRadius * Math.sin(rad);
+                        const textX = 120 + textRadius * Math.cos(rad);
+                        const textY = 120 + textRadius * Math.sin(rad);
 
                         return (
                             <g key={speed}>
-                                <circle cx={x} cy={y} r="3" fill="#93dac4" />
+                                {/* Marker line */}
+                                <line
+                                    x1={x1}
+                                    y1={y1}
+                                    x2={x2}
+                                    y2={y2}
+                                    stroke="#93dac4"
+                                    strokeWidth="3"
+                                    strokeLinecap="round"
+                                />
+                                {/* Speed number */}
                                 <text
                                     x={textX}
                                     y={textY}
                                     fill="#93dac4"
-                                    fontSize="12"
+                                    fontSize="13"
                                     fontWeight="bold"
                                     textAnchor="middle"
                                     dominantBaseline="middle"
@@ -664,22 +694,36 @@ function App() {
                         );
                     })}
 
-                    {/* Needle */}
-                    <g transform={`rotate(${rotation} 110 110)`}>
+                    {/* Needle - rotates from 225° to 495° */}
+                    <g transform={`rotate(${rotation} 120 120)`}>
+                        {/* Needle shadow/glow */}
                         <line
-                            x1="110"
-                            y1="110"
-                            x2="110"
-                            y2="45"
+                            x1="120"
+                            y1="120"
+                            x2="120"
+                            y2="40"
+                            stroke="rgba(78, 204, 163, 0.3)"
+                            strokeWidth="6"
+                            strokeLinecap="round"
+                        />
+                        {/* Main needle */}
+                        <line
+                            x1="120"
+                            y1="120"
+                            x2="120"
+                            y2="40"
                             stroke="#4ecca3"
                             strokeWidth="4"
                             strokeLinecap="round"
-                            filter="drop-shadow(0 2px 4px rgba(0,0,0,0.5))"
+                            filter="url(#glow)"
                         />
-                        <circle cx="110" cy="110" r="10" fill="#4ecca3" />
+                        {/* Needle base */}
+                        <circle cx="120" cy="120" r="12" fill="#4ecca3" />
+                        <circle cx="120" cy="120" r="8" fill="#0f3460" />
                     </g>
 
-                    <circle cx="110" cy="110" r="6" fill="#0f3460" />
+                    {/* Center decoration */}
+                    <circle cx="120" cy="120" r="4" fill="#4ecca3" />
                 </svg>
 
                 {/* Speed Display - Below Speedometer */}

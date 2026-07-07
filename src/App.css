@@ -493,47 +493,75 @@
     }
 
 /* SPEEDOMETER STYLES - COMPLETE */
+/* SPEEDOMETER STYLES - UPDATED */
 .speedometer-container {
     position: relative;
     width: 100%;
-    max-width: 300px;
+    max-width: 320px;
     margin: 0 auto 30px;
-    padding: 10px;
+    padding: 20px 10px;
 }
 
 .speedometer {
     width: 100%;
     height: auto;
     display: block;
-    filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3));
+    filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.4));
 }
 
 .speedometer-value {
     text-align: center;
-    margin-top: 15px;
-    padding: 15px;
-    background: rgba(15, 52, 96, 0.6);
-    border-radius: 10px;
-    border: 2px solid #1a4d6d;
+    margin-top: 20px;
+    padding: 18px;
+    background: rgba(15, 52, 96, 0.4);
+    border-radius: 12px;
+    border: 2px solid rgba(78, 204, 163, 0.3);
     backdrop-filter: blur(10px);
 }
 
 .speed-number {
-    font-size: 56px;
-    font-weight: bold;
+    font-size: 64px;
+    font-weight: 300;
     color: #4ecca3;
     line-height: 1;
-    text-shadow: 0 2px 8px rgba(78, 204, 163, 0.5);
-    font-family: 'Courier New', monospace;
+    text-shadow: 0 0 20px rgba(78, 204, 163, 0.6);
+    font-family: 'Arial', sans-serif;
+    letter-spacing: -2px;
 }
 
 .speed-unit {
-    font-size: 18px;
+    font-size: 16px;
     color: #93dac4;
     margin-top: 8px;
-    text-transform: uppercase;
-    letter-spacing: 3px;
-    font-weight: bold;
+    text-transform: lowercase;
+    letter-spacing: 2px;
+    font-weight: 300;
+}
+
+/* Mobile adjustments */
+@media (max-width: 768px) {
+    .speedometer-container {
+        max-width: 280px;
+        padding: 15px 10px;
+    }
+
+    .speed-number {
+        font-size: 54px;
+    }
+
+    .speed-unit {
+        font-size: 14px;
+    }
+}
+
+@media (max-width: 480px) {
+    .speedometer-container {
+        max-width: 260px;
+    }
+
+    .speed-number {
+        font-size: 48px;
+    }
 }
 
 /* Trip Status Compact Grid */

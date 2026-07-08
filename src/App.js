@@ -615,6 +615,11 @@ function App() {
             }
         });
 
+        // Add real-time distance from the current tank fill
+        if (totalKmSinceLastFill > 0) {
+            totalKm += totalKmSinceLastFill;
+        }
+
         const avgMileage = totalLitres > 0 ? (totalKm / totalLitres).toFixed(2) : '0';
         return { totalLitres, totalSpent, totalKm, avgMileage };
     };
@@ -792,7 +797,7 @@ function App() {
                         </div>
                         <div className="stat-box">
                             <div className="stat-label">Spent</div>
-                            <div className="stat-value" style={{ fontSize: '20px' }}>₹{monthly.totalSpent.toFixed(0)}</div>
+                            <div className="stat-value" style={{ fontSize: '20px' }}>Rs. {monthly.totalSpent.toFixed(0)}</div>
                         </div>
                         <div className="stat-box">
                             <div className="stat-label">Distance</div>
@@ -840,7 +845,7 @@ function App() {
                 </div>
 
                 <div className="input-group">
-                    <label htmlFor="pricePerLitre">Price per Litre (₹)</label>
+                    <label htmlFor="pricePerLitre">Price per Litre (Rs.)</label>
                     <input
                         type="number"
                         id="pricePerLitre"
@@ -981,7 +986,7 @@ function App() {
                                             Litres: <span>{entry.litres}L</span>
                                         </div>
                                         <div className="history-detail">
-                                            Cost: <span>₹{entry.totalCost.toFixed(0)}</span>
+                                            Cost: <span>Rs. {entry.totalCost.toFixed(0)}</span>
                                         </div>
                                         <div className="history-detail">
                                             Dist: <span>{entry.kmTraveled.toFixed(1)} km</span>

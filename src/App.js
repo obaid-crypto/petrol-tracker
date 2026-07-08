@@ -34,6 +34,31 @@ function App() {
         lastDistance: 0
     });
 
+    const [smoothSpeed, setSmoothSpeed] = useState(0);
+
+    useEffect(() => {
+        let animationFrameId;
+        const targetSpeed = gpsDebug.speed * 3.6; // target in km/h
+        
+        const animate = () => {
+            setSmoothSpeed(prev => {
+                const diff = targetSpeed - prev;
+                if (Math.abs(diff) < 0.05) {
+                    return targetSpeed;
+                }
+                const step = diff * 0.06;
+                return prev + step;
+            });
+            animationFrameId = requestAnimationFrame(animate);
+        };
+
+        animate();
+
+        return () => {
+            cancelAnimationFrame(animationFrameId);
+        };
+    }, [gpsDebug.speed]);
+
     const watchIdRef = useRef(null);
     const lastPositionRef = useRef(null);
     const isInitialMount = useRef(true);
@@ -596,9 +621,8 @@ function App() {
 
     // SPEEDOMETER - EXACT DESIGN MATCH
     const renderSpeedometer = () => {
-        const speedKmh = gpsDebug.speed * 3.6; // Convert m/s to km/h
         const maxSpeed = 120;
-        const clampedSpeed = Math.max(0, Math.min(speedKmh, maxSpeed));
+        const clampedSpeed = Math.max(0, Math.min(smoothSpeed, maxSpeed));
         const speedPercentage = (clampedSpeed / maxSpeed) * 100;
 
         // Arc goes from bottom-left (0) to bottom-right (120)

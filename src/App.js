@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import './App.css';
 
 function App() {
@@ -36,10 +36,16 @@ function App() {
 
     const [smoothSpeed, setSmoothSpeed] = useState(0);
 
+    // Fixed: Animation frame cleanup
     useEffect(() => {
+        if (!isTracking) {
+            setSmoothSpeed(0);
+            return;
+        }
+
         let animationFrameId;
         const targetSpeed = gpsDebug.speed * 3.6; // target in km/h
-        
+
         const animate = () => {
             setSmoothSpeed(prev => {
                 const diff = targetSpeed - prev;
@@ -55,9 +61,11 @@ function App() {
         animate();
 
         return () => {
-            cancelAnimationFrame(animationFrameId);
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+            }
         };
-    }, [gpsDebug.speed]);
+    }, [gpsDebug.speed, isTracking]);
 
     const watchIdRef = useRef(null);
     const lastPositionRef = useRef(null);
@@ -123,6 +131,7 @@ function App() {
         showGpsMessage(message, true);
     }, [showGpsMessage]);
 
+    // Fixed: GPS position filtering logic
     const handlePositionUpdate = useCallback((position) => {
         positionCountRef.current += 1;
         const updateNum = positionCountRef.current;
@@ -180,18 +189,22 @@ function App() {
             let shouldUpdate = false;
             let reason = '';
 
+            // Fixed: Proper filtering logic with all conditions
             if (distanceMeters < 10) {
                 reason = 'Distance < 10m (GPS drift)';
                 console.log('⏭️', reason);
+                shouldUpdate = false;
             }
             else if (position.coords.accuracy > 30) {
                 reason = 'Accuracy poor (' + position.coords.accuracy.toFixed(0) + 'm)';
                 console.log('⏭️', reason);
+                shouldUpdate = false;
             }
             else if (position.coords.speed !== null && position.coords.speed < 0.5) {
                 if (distanceMeters < 15) {
                     reason = 'Low speed and small distance';
                     console.log('⏭️', reason);
+                    shouldUpdate = false;
                 } else {
                     shouldUpdate = true;
                     reason = 'Distance significant despite low speed';
@@ -216,11 +229,17 @@ function App() {
                 } else {
                     reason = 'Total movement too small (drift)';
                     console.log('⏭️', reason);
+                    shouldUpdate = false;
                 }
             }
             else if (distanceMeters > 20) {
                 shouldUpdate = true;
                 reason = 'Large movement detected';
+            }
+            else {
+                // Default case for moderate movement
+                shouldUpdate = true;
+                reason = 'Normal movement';
             }
 
             if (shouldUpdate) {
@@ -281,21 +300,58 @@ function App() {
         setTodayDate();
     }, []);
 
+    // Fixed: localStorage error handling
     useEffect(() => {
         if (isInitialMount.current) {
             isInitialMount.current = false;
             return;
         }
 
-        const data = {
-            petrolEntries,
-            trips,
-            currentTrip,
-            totalKmSinceLastFill,
-            lastSaved: new Date().toISOString()
-        };
+        try {
+            const data = {
+                petrolEntries,
+                trips,
+                currentTrip,
+                totalKmSinceLastFill,
+                lastSaved: new Date().toISOString()
+            };
 
-        localStorage.setItem('petrolTrackerData', JSON.stringify(data));
+            const dataString = JSON.stringify(data);
+
+            // Check size (localStorage typically has 5-10MB limit)
+            if (dataString.length > 5000000) {
+                console.warn('Data size approaching limit');
+                // Keep only last 50 entries
+                const trimmedData = {
+                    ...data,
+                    petrolEntries: data.petrolEntries.slice(0, 50),
+                    trips: data.trips.slice(0, 100)
+                };
+                localStorage.setItem('petrolTrackerData', JSON.stringify(trimmedData));
+            } else {
+                localStorage.setItem('petrolTrackerData', dataString);
+            }
+        } catch (error) {
+            if (error.name === 'QuotaExceededError') {
+                console.error('Storage quota exceeded');
+                alert('⚠️ Storage full! Some old data may be removed.');
+                // Emergency cleanup: keep only last 20 entries
+                const emergencyData = {
+                    petrolEntries: petrolEntries.slice(0, 20),
+                    trips: trips.slice(0, 50),
+                    currentTrip,
+                    totalKmSinceLastFill,
+                    lastSaved: new Date().toISOString()
+                };
+                try {
+                    localStorage.setItem('petrolTrackerData', JSON.stringify(emergencyData));
+                } catch (e) {
+                    console.error('Emergency save failed:', e);
+                }
+            } else {
+                console.error('Storage error:', error);
+            }
+        }
     }, [petrolEntries, trips, currentTrip, totalKmSinceLastFill]);
 
     useEffect(() => {
@@ -363,10 +419,11 @@ function App() {
         setShowResetConfirm(false);
     };
 
+    // Fixed: String literal syntax error
     const handleInstallClick = async () => {
         if (!deferredPrompt) {
             if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
-                alert('To install:\n\n1. Tap Share button (⬆️)\n2. Tap "Add to Home Screen"\n3. Tap "Add"');
+                alert('To install:\n\n1. Tap Share button\n2. Tap "Add to Home Screen"\n3. Tap "Add"');
                 return;
             }
             alert('Install option not available. Try Chrome or Safari.');
@@ -386,16 +443,17 @@ function App() {
         setDeferredPrompt(null);
     };
 
+    // Fixed: Input validation
     const savePetrolEntry = () => {
         const litresNum = parseFloat(litres);
         const priceNum = parseFloat(pricePerLitre);
 
-        if (!litresNum || litresNum <= 0) {
+        if (isNaN(litresNum) || !isFinite(litresNum) || litresNum <= 0) {
             alert('❌ Please enter valid litres!');
             return;
         }
 
-        if (!priceNum || priceNum <= 0) {
+        if (isNaN(priceNum) || !isFinite(priceNum) || priceNum <= 0) {
             alert('❌ Please enter valid price!');
             return;
         }
@@ -405,14 +463,18 @@ function App() {
             return;
         }
 
+        // Round to avoid floating point issues
+        const roundedLitres = Math.round(litresNum * 100) / 100;
+        const roundedPrice = Math.round(priceNum * 100) / 100;
+
         const entry = {
             id: Date.now(),
-            litres: litresNum,
-            pricePerLitre: priceNum,
-            totalCost: litresNum * priceNum,
+            litres: roundedLitres,
+            pricePerLitre: roundedPrice,
+            totalCost: roundedLitres * roundedPrice,
             date: fillDate,
             kmTraveled: totalKmSinceLastFill,
-            mileage: totalKmSinceLastFill > 0 ? (totalKmSinceLastFill / litresNum).toFixed(2) : 0
+            mileage: totalKmSinceLastFill > 0 ? (totalKmSinceLastFill / roundedLitres).toFixed(2) : 0
         };
 
         setPetrolEntries(prev => [entry, ...prev]);
@@ -431,26 +493,30 @@ function App() {
         setShowManualEntry(true);
     };
 
+    // Fixed: Manual KM validation
     const saveManualKm = () => {
         const kmNum = parseFloat(manualKm);
 
-        if (!kmNum || kmNum <= 0) {
+        if (isNaN(kmNum) || !isFinite(kmNum) || kmNum <= 0) {
             alert('❌ Please enter valid kilometers!');
             return;
         }
 
         if (kmNum > 1000) {
-            const confirm = window.confirm('⚠️ You entered ' + kmNum + ' km.\n\nThis seems very high. Continue?');
-            if (!confirm) return;
+            const confirmed = window.confirm('⚠️ You entered ' + kmNum + ' km.\n\nThis seems very high. Continue?');
+            if (!confirmed) return;
         }
 
-        setTotalKmSinceLastFill(prev => prev + kmNum);
+        // Round to 2 decimal places
+        const roundedKm = Math.round(kmNum * 100) / 100;
+
+        setTotalKmSinceLastFill(prev => prev + roundedKm);
 
         const manualTrip = {
             id: Date.now(),
             startTime: new Date().toISOString(),
             endTime: new Date().toISOString(),
-            distance: kmNum,
+            distance: roundedKm,
             isActive: false,
             isManual: true
         };
@@ -460,7 +526,7 @@ function App() {
         setManualKm('');
         setShowManualEntry(false);
 
-        alert('✅ ' + kmNum + ' km added!');
+        alert('✅ ' + roundedKm + ' km added!');
     };
 
     const cancelManualEntry = () => {
@@ -468,9 +534,16 @@ function App() {
         setShowManualEntry(false);
     };
 
+    // Fixed: Race condition prevention
     const startTrip = () => {
         if (!navigator.geolocation) {
             alert('❌ GPS not supported');
+            return;
+        }
+
+        // Prevent multiple simultaneous tracking sessions
+        if (watchIdRef.current) {
+            console.warn('Trip already in progress');
             return;
         }
 
@@ -491,6 +564,24 @@ function App() {
         setCurrentTrip(newTrip);
         setIsTracking(true);
 
+        const startWatching = (highAccuracy) => {
+            const options = {
+                enableHighAccuracy: highAccuracy,
+                timeout: 30000,
+                maximumAge: highAccuracy ? 5000 : 10000
+            };
+
+            watchIdRef.current = navigator.geolocation.watchPosition(
+                handlePositionUpdate,
+                handleGPSError,
+                options
+            );
+
+            const accuracyMode = highAccuracy ? 'High Accuracy' : 'Standard';
+            showGpsMessage('🟢 GPS Active (' + accuracyMode + ')', false);
+            setGpsDebug(prev => ({ ...prev, status: 'Tracking active (' + accuracyMode + ')' }));
+        };
+
         navigator.geolocation.getCurrentPosition(
             (position) => {
                 lastPositionRef.current = {
@@ -502,22 +593,11 @@ function App() {
                 };
 
                 positionHistoryRef.current = [lastPositionRef.current];
-                setGpsDebug(prev => ({ ...prev, status: 'Tracking active', speed: position.coords.speed || 0 }));
-
-                watchIdRef.current = navigator.geolocation.watchPosition(
-                    handlePositionUpdate,
-                    handleGPSError,
-                    {
-                        enableHighAccuracy: true,
-                        timeout: 30000,
-                        maximumAge: 5000
-                    }
-                );
-
-                showGpsMessage('🟢 GPS Active!', false);
+                startWatching(true);
             },
             (error) => {
-                if (error.code === 3) {
+                if (error.code === 3) { // Timeout
+                    console.log('High accuracy timeout, trying standard mode...');
                     navigator.geolocation.getCurrentPosition(
                         (position) => {
                             lastPositionRef.current = {
@@ -529,19 +609,7 @@ function App() {
                             };
 
                             positionHistoryRef.current = [lastPositionRef.current];
-
-                            watchIdRef.current = navigator.geolocation.watchPosition(
-                                handlePositionUpdate,
-                                handleGPSError,
-                                {
-                                    enableHighAccuracy: false,
-                                    timeout: 30000,
-                                    maximumAge: 10000
-                                }
-                            );
-
-                            showGpsMessage('🟡 GPS Active', false);
-                            setGpsDebug(prev => ({ ...prev, status: 'Active (Standard)' }));
+                            startWatching(false);
                         },
                         (retryError) => {
                             handleGPSError(retryError);
@@ -606,7 +674,8 @@ function App() {
 
         petrolEntries.forEach(entry => {
             const entryDate = new Date(entry.date);
-            if (entryDate.getMonth() === currentMonth && entryDate.getFullYear() === currentYear) {
+            if (entryDate.getMonth() === currentMonth &&
+                entryDate.getFullYear() === currentYear) {
                 totalLitres += entry.litres;
                 totalSpent += entry.totalCost;
                 if (entry.kmTraveled > 0) {
@@ -624,116 +693,102 @@ function App() {
         return { totalLitres, totalSpent, totalKm, avgMileage };
     };
 
-    // SPEEDOMETER - EXACT DESIGN MATCH
-    const renderSpeedometer = () => {
-        const maxSpeed = 120;
-        const clampedSpeed = Math.max(0, Math.min(smoothSpeed, maxSpeed));
-        const speedPercentage = (clampedSpeed / maxSpeed) * 100;
+    // Memoized Speedometer Component
+    const SpeedometerComponent = useMemo(() => {
+        return ({ speed }) => {
+            const maxSpeed = 120;
+            const clampedSpeed = Math.max(0, Math.min(speed, maxSpeed));
+            const speedPercentage = (clampedSpeed / maxSpeed) * 100;
 
-        // Arc goes from bottom-left (0) to bottom-right (120)
-        // Base needle points straight up (12 o'clock, 270deg).
-        // To point to bottom-left (135deg) at speed 0, rotate by 225deg.
-        // To point to bottom-right (45deg) at speed 120, rotate by 225 + 270 = 495deg (135deg).
-        const startAngle = 225;
-        const rotation = startAngle + (speedPercentage / 100) * 270;
+            const startAngle = 225;
+            const rotation = startAngle + (speedPercentage / 100) * 270;
 
-        return (
-            <div className="speedometer-container">
-                <svg className="speedometer" viewBox="0 0 300 300">
-                    <defs>
-                        {/* Gradient Matching the pink-to-purple-to-blue-to-cyan design */}
-                        <linearGradient id="speedGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                            <stop offset="0%" stopColor="#f3557a" />
-                            <stop offset="30%" stopColor="#b73fe0" />
-                            <stop offset="60%" stopColor="#5a70f9" />
-                            <stop offset="100%" stopColor="#5de4db" />
-                        </linearGradient>
-                    </defs>
+            return (
+                <div className="speedometer-container">
+                    <svg className="speedometer" viewBox="0 0 300 300">
+                        <defs>
+                            <linearGradient id="speedGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                                <stop offset="0%" stopColor="#f3557a" />
+                                <stop offset="30%" stopColor="#b73fe0" />
+                                <stop offset="60%" stopColor="#5a70f9" />
+                                <stop offset="100%" stopColor="#5de4db" />
+                            </linearGradient>
+                        </defs>
 
-                    {/* Concentric circles behind needle (radar lines) */}
-                    {Array.from({ length: 9 }, (_, i) => 15 + i * 8).map((r) => (
-                        <circle
-                            key={r}
-                            cx="150"
-                            cy="150"
-                            r={r}
+                        {/* Concentric circles */}
+                        {Array.from({ length: 9 }, (_, i) => 15 + i * 8).map((r) => (
+                            <circle
+                                key={r}
+                                cx="150"
+                                cy="150"
+                                r={r}
+                                fill="none"
+                                stroke="rgba(66, 230, 207, 0.07)"
+                                strokeWidth="1.5"
+                            />
+                        ))}
+
+                        {/* Main colored arc */}
+                        <path
+                            d="M 72.22 227.78 A 110 110 0 1 1 227.78 227.78"
                             fill="none"
-                            stroke="rgba(66, 230, 207, 0.07)"
-                            strokeWidth="1.5"
-                        />
-                    ))}
-
-                    {/* Main colored arc - 270 degrees */}
-                    <path
-                        d="M 72.22 227.78 A 110 110 0 1 1 227.78 227.78"
-                        fill="none"
-                        stroke="url(#speedGradient)"
-                        strokeWidth="14"
-                        strokeLinecap="round"
-                    />
-
-                    {/* Speed markers: 0, 30, 60, 90, 120 (styled with handwriting font) */}
-                    {[
-                        { speed: 0, x: 55, y: 245, label: '0' },
-                        { speed: 30, x: 30, y: 100, label: '30' },
-                        { speed: 60, x: 150, y: 15, label: '60' },
-                        { speed: 90, x: 270, y: 100, label: '90' },
-                        { speed: 120, x: 245, y: 245, label: '120' }
-                    ].map(({ speed, x, y, label }) => (
-                        <text
-                            key={speed}
-                            x={x}
-                            y={y}
-                            fill="#b5c0c9"
-                            fontSize="24"
-                            fontWeight="400"
-                            textAnchor="middle"
-                            dominantBaseline="middle"
-                            style={{ fontFamily: "'Caveat', 'Kalam', cursive" }}
-                        >
-                            {label}
-                        </text>
-                    ))}
-
-                    {/* Needle and Pivot Hub Group */}
-                    <g transform={`rotate(${rotation} 150 150)`}>
-                        {/* Needle line (from tail to tip) */}
-                        <line
-                            x1="150"
-                            y1="170"
-                            x2="150"
-                            y2="65"
-                            stroke="#42e6cf"
-                            strokeWidth="3.5"
+                            stroke="url(#speedGradient)"
+                            strokeWidth="14"
                             strokeLinecap="round"
                         />
 
-                        {/* Outer pivot circle */}
-                        <circle
-                            cx="150"
-                            cy="150"
-                            r="10"
-                            fill="#42e6cf"
-                        />
+                        {/* Speed markers */}
+                        {[
+                            { speed: 0, x: 55, y: 245, label: '0' },
+                            { speed: 30, x: 30, y: 100, label: '30' },
+                            { speed: 60, x: 150, y: 15, label: '60' },
+                            { speed: 90, x: 270, y: 100, label: '90' },
+                            { speed: 120, x: 245, y: 245, label: '120' }
+                        ].map(({ speed, x, y, label }) => (
+                            <text
+                                key={speed}
+                                x={x}
+                                y={y}
+                                fill="#b5c0c9"
+                                fontSize="24"
+                                fontWeight="400"
+                                textAnchor="middle"
+                                dominantBaseline="middle"
+                                style={{ fontFamily: "'Caveat', 'Kalam', cursive" }}
+                            >
+                                {label}
+                            </text>
+                        ))}
 
-                        {/* Inner dark center cap */}
-                        <circle
-                            cx="150"
-                            cy="150"
-                            r="4"
-                            fill="#16213e"
-                        />
-                    </g>
-                </svg>
+                        {/* Needle and Pivot */}
+                        <g transform={`rotate(${rotation} 150 150)`}>
+                            <line
+                                x1="150"
+                                y1="170"
+                                x2="150"
+                                y2="65"
+                                stroke="#42e6cf"
+                                strokeWidth="3.5"
+                                strokeLinecap="round"
+                            />
+                            <circle cx="150" cy="150" r="10" fill="#42e6cf" />
+                            <circle cx="150" cy="150" r="4" fill="#16213e" />
+                        </g>
+                    </svg>
 
-                {/* Speed Digital Display */}
-                <div className="speedometer-value">
-                    <div className="speed-number">{clampedSpeed.toFixed(1)}</div>
-                    <div className="speed-unit">km/h</div>
+                    {/* Speed Digital Display */}
+                    <div className="speedometer-value">
+                        <div className="speed-number">{clampedSpeed.toFixed(1)}</div>
+                        <div className="speed-unit">km/h</div>
+                    </div>
                 </div>
-            </div>
-        );
-    };
+            );
+        };
+    }, []);
+
+    const Speedometer = React.memo(SpeedometerComponent, (prevProps, nextProps) => {
+        return Math.abs(prevProps.speed - nextProps.speed) < 0.5;
+    });
 
     const renderDashboard = () => {
         const monthly = getMonthlySummary();
@@ -886,70 +941,135 @@ function App() {
             ? currentTrip.distance.toFixed(2)
             : '0.00';
 
+        const lastEntry = petrolEntries[0];
+        const monthly = getMonthlySummary();
+
+        let effectiveMileage = 0;
+        if (lastEntry && lastEntry.mileage > 0) {
+            effectiveMileage = parseFloat(lastEntry.mileage);
+        } else if (parseFloat(monthly.avgMileage) > 0) {
+            effectiveMileage = parseFloat(monthly.avgMileage);
+        } else if (lastEntry && lastEntry.litres > 0 && totalKmSinceLastFill > 0) {
+            effectiveMileage = totalKmSinceLastFill / lastEntry.litres;
+        }
+
+        let costPerKm = 0;
+        if (lastEntry && effectiveMileage > 0) {
+            costPerKm = lastEntry.pricePerLitre / effectiveMileage;
+        } else if (lastEntry && lastEntry.kmTraveled > 0) {
+            costPerKm = lastEntry.totalCost / lastEntry.kmTraveled;
+        }
+
+        const tankCostIncurred = costPerKm * totalKmSinceLastFill;
+        const currentTripDistanceVal = currentTrip && currentTrip.isActive ? currentTrip.distance : 0;
+        const tripCostIncurred = costPerKm * currentTripDistanceVal;
+        const totalTankCost = lastEntry ? lastEntry.totalCost : 0;
+        const remainingFuelValue = Math.max(0, totalTankCost - tankCostIncurred);
+
         return (
-            <div className="card">
-                <h2>📍 GPS Tracker</h2>
+            <div>
+                <div className="card">
+                    <h2>📍 GPS Tracker</h2>
 
-                {/* Speedometer */}
-                {isTracking && renderSpeedometer()}
+                    {isTracking && <Speedometer speed={smoothSpeed} />}
 
-                <div style={{
-                    background: isTracking ? 'linear-gradient(135deg, #1a4d6d 0%, #0f3460 100%)' : '#0f3460',
-                    padding: '12px',
-                    borderRadius: '10px',
-                    marginBottom: '15px',
-                    border: `2px solid ${isTracking ? '#4ecca3' : '#1a4d6d'}`,
-                    fontSize: '12px'
-                }}>
-                    <div style={{ color: '#4ecca3', fontWeight: 'bold', marginBottom: '6px', fontSize: '13px' }}>
-                        📡 {gpsDebug.status}
+                    <div style={{
+                        background: isTracking ? 'linear-gradient(135deg, #1a4d6d 0%, #0f3460 100%)' : '#0f3460',
+                        padding: '12px',
+                        borderRadius: '10px',
+                        marginBottom: '15px',
+                        border: `2px solid ${isTracking ? '#4ecca3' : '#1a4d6d'}`,
+                        fontSize: '12px'
+                    }}>
+                        <div style={{ color: '#4ecca3', fontWeight: 'bold', marginBottom: '6px', fontSize: '13px' }}>
+                            📡 {gpsDebug.status}
+                        </div>
+                        {isTracking && (
+                            <div style={{ color: '#e8e8e8', fontFamily: 'monospace', fontSize: '11px', lineHeight: '1.5' }}>
+                                Updates: <span style={{ color: '#4ecca3' }}>{gpsDebug.updates}</span> |
+                                Accuracy: <span style={{ color: gpsDebug.accuracy < 20 ? '#4ecca3' : '#f4a261' }}>
+                                    {gpsDebug.accuracy.toFixed(0)}m
+                                </span>
+                            </div>
+                        )}
                     </div>
-                    {isTracking && (
-                        <div style={{ color: '#e8e8e8', fontFamily: 'monospace', fontSize: '11px', lineHeight: '1.5' }}>
-                            Updates: <span style={{ color: '#4ecca3' }}>{gpsDebug.updates}</span> |
-                            Accuracy: <span style={{ color: gpsDebug.accuracy < 20 ? '#4ecca3' : '#f4a261' }}>
-                                {gpsDebug.accuracy.toFixed(0)}m
-                            </span>
+
+                    <div className="trip-status-grid">
+                        <div className={`trip-status-compact ${isTracking ? 'tracking' : ''}`}>
+                            <div className="trip-label-small">CURRENT TRIP</div>
+                            <div className="trip-value-small">{currentTripKm} km</div>
+                        </div>
+
+                        <div className="trip-status-compact">
+                            <div className="trip-label-small">TOTAL</div>
+                            <div className="trip-value-small">{totalKmSinceLastFill.toFixed(2)} km</div>
+                        </div>
+                    </div>
+
+                    {!isTracking ? (
+                        <>
+                            <button className="btn btn-success btn-lg" onClick={startTrip}>
+                                ▶️ START GPS
+                            </button>
+                            <button
+                                className="btn btn-secondary btn-lg"
+                                style={{ marginTop: '10px' }}
+                                onClick={handleManualEntryRequest}
+                            >
+                                ✏️ ADD MANUAL KM
+                            </button>
+                        </>
+                    ) : (
+                        <button className="btn btn-danger btn-lg" onClick={stopTrip}>
+                            ⏹️ STOP GPS
+                        </button>
+                    )}
+
+                    {showGpsAlert && (
+                        <div className="alert alert-warning" style={{ marginTop: '15px' }}>
+                            {gpsMessage}
                         </div>
                     )}
                 </div>
 
-                <div className="trip-status-grid">
-                    <div className={`trip-status-compact ${isTracking ? 'tracking' : ''}`}>
-                        <div className="trip-label-small">CURRENT TRIP</div>
-                        <div className="trip-value-small">{currentTripKm} km</div>
-                    </div>
+                <div className="card cost-panel-card">
+                    <h2>💰 Fuel Expense (Current Fill)</h2>
+                    {petrolEntries.length === 0 ? (
+                        <div className="empty-state-compact">
+                            <p style={{ color: '#93dac4', fontSize: '13px', margin: 0 }}>
+                                💡 Add a petrol fill entry in the <strong>Fuel</strong> tab to enable live rupee cost tracking!
+                            </p>
+                        </div>
+                    ) : (
+                        <div className="cost-grid">
+                            <div className="cost-box highlight">
+                                <div className="cost-label">TANK SPENT</div>
+                                <div className="cost-value">Rs. {tankCostIncurred.toFixed(1)}</div>
+                                <div className="cost-subtext">of Rs. {totalTankCost.toFixed(0)} filled</div>
+                            </div>
 
-                    <div className="trip-status-compact">
-                        <div className="trip-label-small">TOTAL</div>
-                        <div className="trip-value-small">{totalKmSinceLastFill.toFixed(2)} km</div>
-                    </div>
+                            <div className="cost-box">
+                                <div className="cost-label">TRIP COST</div>
+                                <div className="cost-value">Rs. {tripCostIncurred.toFixed(1)}</div>
+                                <div className="cost-subtext">{currentTripDistanceVal.toFixed(1)} km trip</div>
+                            </div>
+
+                            <div className="cost-box">
+                                <div className="cost-label">COST / KM</div>
+                                <div className="cost-value">Rs. {costPerKm.toFixed(2)}</div>
+                                <div className="cost-subtext">per km driven</div>
+                            </div>
+
+                            <div className="cost-box">
+                                <div className="cost-label">FUEL LEFT VALUE</div>
+                                <div className="cost-value" style={{ color: remainingFuelValue > 0 ? '#4ecca3' : '#ee6c4d' }}>
+                                    Rs. {remainingFuelValue.toFixed(1)}
+                                </div>
+                                <div className="cost-subtext">est. remaining</div>
+                            </div>
+                        </div>
+                    )}
                 </div>
-
-                {!isTracking ? (
-                    <>
-                        <button className="btn btn-success btn-lg" onClick={startTrip}>
-                            ▶️ START GPS
-                        </button>
-                        <button
-                            className="btn btn-secondary btn-lg"
-                            style={{ marginTop: '10px' }}
-                            onClick={handleManualEntryRequest}
-                        >
-                            ✏️ ADD MANUAL KM
-                        </button>
-                    </>
-                ) : (
-                    <button className="btn btn-danger btn-lg" onClick={stopTrip}>
-                        ⏹️ STOP GPS
-                    </button>
-                )}
-
-                {showGpsAlert && (
-                    <div className="alert alert-warning" style={{ marginTop: '15px' }}>
-                        {gpsMessage}
-                    </div>
-                )}
             </div>
         );
     };

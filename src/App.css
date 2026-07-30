@@ -1,4 +1,4 @@
-.App {
+App {
     min-height: 100vh;
     padding-bottom: 80px;
 }
@@ -732,4 +732,61 @@ html {
 /* Box sizing for all elements */
 * {
     box-sizing: border-box;
+}
+
+/* Cost Panel Styles */
+.cost-panel-card {
+    border: 1px solid #1a4d6d;
+}
+
+.cost-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    margin-top: 10px;
+}
+
+.cost-box {
+    background: #0f3460;
+    padding: 14px;
+    border-radius: 12px;
+    border: 2px solid #1a4d6d;
+    text-align: center;
+    transition: all 0.3s ease;
+}
+
+    .cost-box.highlight {
+        background: linear-gradient(135deg, #1a4d6d 0%, #0f3460 100%);
+        border-color: #4ecca3;
+        box-shadow: 0 4px 12px rgba(78, 204, 163, 0.15);
+    }
+
+.cost-label {
+    color: #93dac4;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 6px;
+}
+
+.cost-value {
+    color: #4ecca3;
+    font-size: 22px;
+    font-weight: bold;
+    line-height: 1.2;
+}
+
+.cost-subtext {
+    color: #a0b2c6;
+    font-size: 11px;
+    margin-top: 4px;
+}
+
+.empty-state-compact {
+    text-align: center;
+    padding: 15px;
+    background: #0f3460;
+    border-radius: 10px;
+    border: 1px dashed #1a4d6d;
 }

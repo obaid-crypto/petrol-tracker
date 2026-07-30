@@ -1,4 +1,4 @@
-App {
+.App {
     min-height: 100vh;
     padding-bottom: 80px;
 }
@@ -106,13 +106,14 @@ App {
 }
 
 .btn-primary {
-    background: linear-gradient(135deg, #4ecca3 0%, #3baf84 100%);
-    color: #0f3460;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
 }
 
     .btn-primary:hover {
         transform: translateY(-2px);
-        box-shadow: 0 6px 20px rgba(78, 204, 163, 0.4);
+        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
     }
 
     .btn-primary:active {
@@ -242,18 +243,25 @@ App {
     letter-spacing: 1px;
 }
 
+/* NEW: Ride History Styles */
 .history-item {
     background: #0f3460;
     padding: 15px;
     border-radius: 10px;
     margin-bottom: 10px;
     border: 2px solid #1a4d6d;
+    border-left: 4px solid #1a4d6d;
     transition: all 0.3s;
 }
 
     .history-item:hover {
         transform: translateX(5px);
         border-color: #4ecca3;
+    }
+
+    /* NEW: Profit/Loss border colors for ride entries */
+    .history-item[style*="border-left"] {
+        border-left-width: 4px;
     }
 
 .history-header {
@@ -266,6 +274,7 @@ App {
 .history-date {
     color: #4ecca3;
     font-weight: bold;
+    font-size: 14px;
 }
 
 .history-mileage {
@@ -277,9 +286,20 @@ App {
     font-size: 14px;
 }
 
+    /* NEW: Profit display styling */
+    .history-mileage[style*="color: #4ecca3"] {
+        background: rgba(78, 204, 163, 0.2);
+        border: 1px solid #4ecca3;
+    }
+
+    .history-mileage[style*="color: #ee6c4d"] {
+        background: rgba(238, 108, 77, 0.2);
+        border: 1px solid #ee6c4d;
+    }
+
 .history-details {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(2, 1fr);
     gap: 10px;
     font-size: 13px;
 }
@@ -292,6 +312,15 @@ App {
         color: #e8e8e8;
         font-weight: bold;
     }
+
+        /* NEW: Earnings and cost color coding */
+        .history-detail span[style*="color: #4ecca3"] {
+            color: #4ecca3 !important;
+        }
+
+        .history-detail span[style*="color: #ee6c4d"] {
+            color: #ee6c4d !important;
+        }
 
 .bottom-nav {
     position: fixed;
@@ -492,8 +521,7 @@ App {
         margin-bottom: 8px;
     }
 
-/* SPEEDOMETER STYLES - COMPLETE */
-/* SPEEDOMETER STYLES - UPDATED */
+/* SPEEDOMETER STYLES */
 .speedometer-container {
     position: relative;
     width: 100%;
@@ -538,32 +566,6 @@ App {
     font-weight: 300;
 }
 
-/* Mobile adjustments */
-@media (max-width: 768px) {
-    .speedometer-container {
-        max-width: 280px;
-        padding: 15px 10px;
-    }
-
-    .speed-number {
-        font-size: 54px;
-    }
-
-    .speed-unit {
-        font-size: 14px;
-    }
-}
-
-@media (max-width: 480px) {
-    .speedometer-container {
-        max-width: 260px;
-    }
-
-    .speed-number {
-        font-size: 48px;
-    }
-}
-
 /* Trip Status Compact Grid */
 .trip-status-grid {
     display: grid;
@@ -599,6 +601,139 @@ App {
     color: #4ecca3;
     font-size: 22px;
     font-weight: bold;
+}
+
+/* Cost Panel Styles */
+.cost-panel-card {
+    border: 1px solid #1a4d6d;
+}
+
+.cost-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    margin-top: 10px;
+}
+
+.cost-box {
+    background: #0f3460;
+    padding: 14px;
+    border-radius: 12px;
+    border: 2px solid #1a4d6d;
+    text-align: center;
+    transition: all 0.3s ease;
+}
+
+    .cost-box.highlight {
+        background: linear-gradient(135deg, #1a4d6d 0%, #0f3460 100%);
+        border-color: #4ecca3;
+        box-shadow: 0 4px 12px rgba(78, 204, 163, 0.15);
+    }
+
+.cost-label {
+    color: #93dac4;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 6px;
+}
+
+.cost-value {
+    color: #4ecca3;
+    font-size: 22px;
+    font-weight: bold;
+    line-height: 1.2;
+}
+
+.cost-subtext {
+    color: #a0b2c6;
+    font-size: 11px;
+    margin-top: 4px;
+}
+
+.empty-state-compact {
+    text-align: center;
+    padding: 15px;
+    background: #0f3460;
+    border-radius: 10px;
+    border: 1px dashed #1a4d6d;
+}
+
+/* NEW: Ride Entry Modal Specific Styles */
+.modal.ride-modal {
+    border: 2px solid #667eea;
+}
+
+    .modal.ride-modal h2 {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+
+/* NEW: Ride Summary Stats Card */
+.ride-summary-card {
+    background: linear-gradient(135deg, #1a2332 0%, #16213e 100%);
+    border: 2px solid #667eea !important;
+    position: relative;
+    overflow: hidden;
+}
+
+    .ride-summary-card::before {
+        content: '';
+        position: absolute;
+        top: -2px;
+        left: -2px;
+        right: -2px;
+        bottom: -2px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        opacity: 0.1;
+        border-radius: 15px;
+        z-index: 0;
+    }
+
+    .ride-summary-card > * {
+        position: relative;
+        z-index: 1;
+    }
+
+/* NEW: Profit highlight animation */
+@keyframes profitGlow {
+    0%, 100% {
+        box-shadow: 0 0 5px rgba(78, 204, 163, 0.3);
+    }
+
+    50% {
+        box-shadow: 0 0 20px rgba(78, 204, 163, 0.6);
+    }
+}
+
+.stat-box.profit-box {
+    animation: profitGlow 3s infinite;
+}
+
+/* NEW: Warning/Info boxes in modals */
+.modal-warning {
+    background: rgba(238, 108, 77, 0.1);
+    border: 1px solid #ee6c4d;
+    border-radius: 8px;
+    padding: 12px;
+    margin-top: 15px;
+    font-size: 13px;
+    color: #f4a261;
+    line-height: 1.5;
+}
+
+.modal-info {
+    background: rgba(78, 204, 163, 0.1);
+    border: 1px solid #4ecca3;
+    border-radius: 8px;
+    padding: 12px;
+    margin-top: 15px;
+    font-size: 13px;
+    color: #93dac4;
+    line-height: 1.5;
 }
 
 /* Mobile Optimizations */
@@ -679,6 +814,24 @@ App {
     .speedometer-value {
         padding: 12px;
     }
+
+    /* NEW: Mobile ride history adjustments */
+    .history-details {
+        grid-template-columns: 1fr;
+        gap: 8px;
+    }
+
+    .cost-grid {
+        gap: 10px;
+    }
+
+    .cost-value {
+        font-size: 18px;
+    }
+
+    .cost-label {
+        font-size: 10px;
+    }
 }
 
 @media (max-width: 480px) {
@@ -692,6 +845,27 @@ App {
 
     .speed-unit {
         font-size: 14px;
+    }
+
+    .stats-grid {
+        gap: 10px;
+    }
+
+    .stat-box {
+        padding: 12px;
+    }
+
+    .stat-value {
+        font-size: 18px;
+    }
+
+        .stat-value.large {
+            font-size: 24px;
+        }
+
+    /* NEW: Smaller cost boxes on tiny screens */
+    .cost-grid {
+        grid-template-columns: 1fr;
     }
 }
 
@@ -734,59 +908,106 @@ html {
     box-sizing: border-box;
 }
 
-/* Cost Panel Styles */
-.cost-panel-card {
-    border: 1px solid #1a4d6d;
+/* NEW: Gradient text for special elements */
+.gradient-text {
+    background: linear-gradient(135deg, #4ecca3 0%, #667eea 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
 }
 
-.cost-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
-    margin-top: 10px;
-}
-
-.cost-box {
-    background: #0f3460;
-    padding: 14px;
-    border-radius: 12px;
-    border: 2px solid #1a4d6d;
-    text-align: center;
-    transition: all 0.3s ease;
-}
-
-    .cost-box.highlight {
-        background: linear-gradient(135deg, #1a4d6d 0%, #0f3460 100%);
-        border-color: #4ecca3;
-        box-shadow: 0 4px 12px rgba(78, 204, 163, 0.15);
+/* NEW: Shimmer effect for loading states */
+@keyframes shimmer {
+    0% {
+        background-position: -1000px 0;
     }
 
-.cost-label {
-    color: #93dac4;
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    margin-bottom: 6px;
+    100% {
+        background-position: 1000px 0;
+    }
 }
 
-.cost-value {
-    color: #4ecca3;
-    font-size: 22px;
+.loading-shimmer {
+    animation: shimmer 2s infinite linear;
+    background: linear-gradient(90deg, #0f3460 0%, #1a4d6d 50%, #0f3460 100%);
+    background-size: 1000px 100%;
+}
+
+/* NEW: Success/Error state animations */
+@keyframes successPulse {
+    0%, 100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+
+    50% {
+        transform: scale(1.05);
+        opacity: 0.9;
+    }
+}
+
+.success-animation {
+    animation: successPulse 0.6s ease-in-out;
+}
+
+/* NEW: Ride profit badge */
+.profit-badge {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 12px;
     font-weight: bold;
-    line-height: 1.2;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
-.cost-subtext {
-    color: #a0b2c6;
-    font-size: 11px;
-    margin-top: 4px;
+    .profit-badge.positive {
+        background: rgba(78, 204, 163, 0.2);
+        color: #4ecca3;
+        border: 1px solid #4ecca3;
+    }
+
+    .profit-badge.negative {
+        background: rgba(238, 108, 77, 0.2);
+        color: #ee6c4d;
+        border: 1px solid #ee6c4d;
+    }
+
+/* NEW: Enhanced scrollbar styling */
+::-webkit-scrollbar {
+    width: 8px;
 }
 
-.empty-state-compact {
-    text-align: center;
-    padding: 15px;
+::-webkit-scrollbar-track {
     background: #0f3460;
-    border-radius: 10px;
-    border: 1px dashed #1a4d6d;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #1a4d6d;
+    border-radius: 4px;
+}
+
+    ::-webkit-scrollbar-thumb:hover {
+        background: #4ecca3;
+    }
+
+/* NEW: Focus visible for accessibility */
+button:focus-visible,
+input:focus-visible {
+    outline: 2px solid #4ecca3;
+    outline-offset: 2px;
+}
+
+/* NEW: Print styles */
+@media print {
+    .bottom-nav,
+    .btn,
+    .modal-overlay {
+        display: none !important;
+    }
+
+    .card {
+        break-inside: avoid;
+        page-break-inside: avoid;
+    }
 }

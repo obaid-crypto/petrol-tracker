@@ -24,6 +24,12 @@ function App() {
     const [showManualEntry, setShowManualEntry] = useState(false);
     const [manualKm, setManualKm] = useState('');
 
+    // NEW: Ride profit calculator states
+    const [showRideEntry, setShowRideEntry] = useState(false);
+    const [rideKm, setRideKm] = useState('');
+    const [rideEarnings, setRideEarnings] = useState('');
+    const [rideEntries, setRideEntries] = useState([]);
+
     const [gpsDebug, setGpsDebug] = useState({
         updates: 0,
         lastLat: 0,
@@ -44,7 +50,7 @@ function App() {
         }
 
         let animationFrameId;
-        const targetSpeed = gpsDebug.speed * 3.6; // target in km/h
+        const targetSpeed = gpsDebug.speed * 3.6;
 
         const animate = () => {
             setSmoothSpeed(prev => {
@@ -189,7 +195,6 @@ function App() {
             let shouldUpdate = false;
             let reason = '';
 
-            // Fixed: Proper filtering logic with all conditions
             if (distanceMeters < 10) {
                 reason = 'Distance < 10m (GPS drift)';
                 console.log('⏭️', reason);
@@ -237,7 +242,6 @@ function App() {
                 reason = 'Large movement detected';
             }
             else {
-                // Default case for moderate movement
                 shouldUpdate = true;
                 reason = 'Normal movement';
             }
@@ -285,6 +289,7 @@ function App() {
                     setTrips(data.trips || []);
                     setCurrentTrip(data.currentTrip || null);
                     setTotalKmSinceLastFill(data.totalKmSinceLastFill || 0);
+                    setRideEntries(data.rideEntries || []); // NEW: Load ride entries
                 }
             } catch (error) {
                 console.error('Error loading data:', error);
@@ -313,19 +318,19 @@ function App() {
                 trips,
                 currentTrip,
                 totalKmSinceLastFill,
+                rideEntries, // NEW: Save ride entries
                 lastSaved: new Date().toISOString()
             };
 
             const dataString = JSON.stringify(data);
 
-            // Check size (localStorage typically has 5-10MB limit)
             if (dataString.length > 5000000) {
                 console.warn('Data size approaching limit');
-                // Keep only last 50 entries
                 const trimmedData = {
                     ...data,
                     petrolEntries: data.petrolEntries.slice(0, 50),
-                    trips: data.trips.slice(0, 100)
+                    trips: data.trips.slice(0, 100),
+                    rideEntries: data.rideEntries.slice(0, 100) // NEW
                 };
                 localStorage.setItem('petrolTrackerData', JSON.stringify(trimmedData));
             } else {
@@ -335,12 +340,12 @@ function App() {
             if (error.name === 'QuotaExceededError') {
                 console.error('Storage quota exceeded');
                 alert('⚠️ Storage full! Some old data may be removed.');
-                // Emergency cleanup: keep only last 20 entries
                 const emergencyData = {
                     petrolEntries: petrolEntries.slice(0, 20),
                     trips: trips.slice(0, 50),
                     currentTrip,
                     totalKmSinceLastFill,
+                    rideEntries: rideEntries.slice(0, 50), // NEW
                     lastSaved: new Date().toISOString()
                 };
                 try {
@@ -352,7 +357,7 @@ function App() {
                 console.error('Storage error:', error);
             }
         }
-    }, [petrolEntries, trips, currentTrip, totalKmSinceLastFill]);
+    }, [petrolEntries, trips, currentTrip, totalKmSinceLastFill, rideEntries]); // NEW: Added rideEntries
 
     useEffect(() => {
         const handler = (e) => {
@@ -387,6 +392,7 @@ function App() {
         setTrips([]);
         setCurrentTrip(null);
         setTotalKmSinceLastFill(0);
+        setRideEntries([]); // NEW: Reset ride entries
         setLitres('');
         setPricePerLitre('');
         const today = new Date().toISOString().split('T')[0];
@@ -419,7 +425,6 @@ function App() {
         setShowResetConfirm(false);
     };
 
-    // Fixed: String literal syntax error
     const handleInstallClick = async () => {
         if (!deferredPrompt) {
             if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
@@ -443,7 +448,6 @@ function App() {
         setDeferredPrompt(null);
     };
 
-    // Fixed: Input validation
     const savePetrolEntry = () => {
         const litresNum = parseFloat(litres);
         const priceNum = parseFloat(pricePerLitre);
@@ -463,7 +467,6 @@ function App() {
             return;
         }
 
-        // Round to avoid floating point issues
         const roundedLitres = Math.round(litresNum * 100) / 100;
         const roundedPrice = Math.round(priceNum * 100) / 100;
 
@@ -493,7 +496,6 @@ function App() {
         setShowManualEntry(true);
     };
 
-    // Fixed: Manual KM validation
     const saveManualKm = () => {
         const kmNum = parseFloat(manualKm);
 
@@ -507,7 +509,6 @@ function App() {
             if (!confirmed) return;
         }
 
-        // Round to 2 decimal places
         const roundedKm = Math.round(kmNum * 100) / 100;
 
         setTotalKmSinceLastFill(prev => prev + roundedKm);
@@ -534,14 +535,111 @@ function App() {
         setShowManualEntry(false);
     };
 
-    // Fixed: Race condition prevention
+    // NEW: Ride entry handlers
+    const handleRideEntryRequest = () => {
+        setShowRideEntry(true);
+    };
+
+    const saveRideEntry = () => {
+        const kmNum = parseFloat(rideKm);
+        const earningsNum = parseFloat(rideEarnings);
+
+        if (isNaN(kmNum) || !isFinite(kmNum) || kmNum <= 0) {
+            alert('❌ Please enter valid kilometers!');
+            return;
+        }
+
+        if (isNaN(earningsNum) || !isFinite(earningsNum) || earningsNum < 0) {
+            alert('❌ Please enter valid earnings!');
+            return;
+        }
+
+        if (kmNum > 500) {
+            const confirmed = window.confirm('⚠️ You entered ' + kmNum + ' km.\n\nThis seems very high. Continue?');
+            if (!confirmed) return;
+        }
+
+        const roundedKm = Math.round(kmNum * 100) / 100;
+        const roundedEarnings = Math.round(earningsNum * 100) / 100;
+
+        // Calculate fuel cost
+        const lastEntry = petrolEntries[0];
+        let costPerKm = 0;
+        let fuelUsed = 0;
+        let fuelCost = 0;
+
+        if (lastEntry) {
+            const mileage = lastEntry.mileage > 0 ? parseFloat(lastEntry.mileage) :
+                (lastEntry.litres > 0 && totalKmSinceLastFill > 0 ?
+                    totalKmSinceLastFill / lastEntry.litres : 0);
+
+            if (mileage > 0) {
+                fuelUsed = roundedKm / mileage; // litres
+                fuelCost = fuelUsed * lastEntry.pricePerLitre;
+                costPerKm = lastEntry.pricePerLitre / mileage;
+            }
+        }
+
+        const profit = roundedEarnings - fuelCost;
+        const profitPerKm = roundedKm > 0 ? profit / roundedKm : 0;
+
+        const rideEntry = {
+            id: Date.now(),
+            date: new Date().toISOString(),
+            km: roundedKm,
+            earnings: roundedEarnings,
+            fuelUsed: fuelUsed,
+            fuelCost: fuelCost,
+            profit: profit,
+            profitPerKm: profitPerKm,
+            costPerKm: costPerKm
+        };
+
+        setRideEntries(prev => [rideEntry, ...prev]);
+
+        // Add to total km
+        setTotalKmSinceLastFill(prev => prev + roundedKm);
+
+        const rideTrip = {
+            id: Date.now(),
+            startTime: new Date().toISOString(),
+            endTime: new Date().toISOString(),
+            distance: roundedKm,
+            isActive: false,
+            isRide: true,
+            earnings: roundedEarnings
+        };
+
+        setTrips(prev => [...prev, rideTrip]);
+
+        setRideKm('');
+        setRideEarnings('');
+        setShowRideEntry(false);
+
+        // Show detailed summary
+        alert(`✅ Ride Saved!\n\n` +
+            `Distance: ${roundedKm} km\n` +
+            `Earnings: Rs. ${roundedEarnings}\n` +
+            `Fuel Used: ${fuelUsed.toFixed(2)} L\n` +
+            `Fuel Cost: Rs. ${fuelCost.toFixed(2)}\n` +
+            `━━━━━━━━━━━━━━━\n` +
+            `💰 Profit: Rs. ${profit.toFixed(2)}\n` +
+            `Per KM: Rs. ${profitPerKm.toFixed(2)}/km`
+        );
+    };
+
+    const cancelRideEntry = () => {
+        setRideKm('');
+        setRideEarnings('');
+        setShowRideEntry(false);
+    };
+
     const startTrip = () => {
         if (!navigator.geolocation) {
             alert('❌ GPS not supported');
             return;
         }
 
-        // Prevent multiple simultaneous tracking sessions
         if (watchIdRef.current) {
             console.warn('Trip already in progress');
             return;
@@ -596,7 +694,7 @@ function App() {
                 startWatching(true);
             },
             (error) => {
-                if (error.code === 3) { // Timeout
+                if (error.code === 3) {
                     console.log('High accuracy timeout, trying standard mode...');
                     navigator.geolocation.getCurrentPosition(
                         (position) => {
@@ -684,13 +782,50 @@ function App() {
             }
         });
 
-        // Add real-time distance from the current tank fill
         if (totalKmSinceLastFill > 0) {
             totalKm += totalKmSinceLastFill;
         }
 
         const avgMileage = totalLitres > 0 ? (totalKm / totalLitres).toFixed(2) : '0';
         return { totalLitres, totalSpent, totalKm, avgMileage };
+    };
+
+    // NEW: Get ride summary
+    const getRideSummary = () => {
+        const now = new Date();
+        const currentMonth = now.getMonth();
+        const currentYear = now.getFullYear();
+
+        let totalRides = 0;
+        let totalRideKm = 0;
+        let totalEarnings = 0;
+        let totalFuelCost = 0;
+        let totalProfit = 0;
+
+        rideEntries.forEach(ride => {
+            const rideDate = new Date(ride.date);
+            if (rideDate.getMonth() === currentMonth &&
+                rideDate.getFullYear() === currentYear) {
+                totalRides++;
+                totalRideKm += ride.km;
+                totalEarnings += ride.earnings;
+                totalFuelCost += ride.fuelCost;
+                totalProfit += ride.profit;
+            }
+        });
+
+        const avgProfitPerRide = totalRides > 0 ? totalProfit / totalRides : 0;
+        const avgProfitPerKm = totalRideKm > 0 ? totalProfit / totalRideKm : 0;
+
+        return {
+            totalRides,
+            totalRideKm,
+            totalEarnings,
+            totalFuelCost,
+            totalProfit,
+            avgProfitPerRide,
+            avgProfitPerKm
+        };
     };
 
     // Memoized Speedometer Component
@@ -715,7 +850,6 @@ function App() {
                             </linearGradient>
                         </defs>
 
-                        {/* Concentric circles */}
                         {Array.from({ length: 9 }, (_, i) => 15 + i * 8).map((r) => (
                             <circle
                                 key={r}
@@ -728,7 +862,6 @@ function App() {
                             />
                         ))}
 
-                        {/* Main colored arc */}
                         <path
                             d="M 72.22 227.78 A 110 110 0 1 1 227.78 227.78"
                             fill="none"
@@ -737,7 +870,6 @@ function App() {
                             strokeLinecap="round"
                         />
 
-                        {/* Speed markers */}
                         {[
                             { speed: 0, x: 55, y: 245, label: '0' },
                             { speed: 30, x: 30, y: 100, label: '30' },
@@ -760,7 +892,6 @@ function App() {
                             </text>
                         ))}
 
-                        {/* Needle and Pivot */}
                         <g transform={`rotate(${rotation} 150 150)`}>
                             <line
                                 x1="150"
@@ -776,7 +907,6 @@ function App() {
                         </g>
                     </svg>
 
-                    {/* Speed Digital Display */}
                     <div className="speedometer-value">
                         <div className="speed-number">{clampedSpeed.toFixed(1)}</div>
                         <div className="speed-unit">km/h</div>
@@ -792,6 +922,7 @@ function App() {
 
     const renderDashboard = () => {
         const monthly = getMonthlySummary();
+        const rideSummary = getRideSummary(); // NEW
         const lastEntry = petrolEntries[0];
         const currentMileage = lastEntry && totalKmSinceLastFill > 0
             ? (totalKmSinceLastFill / lastEntry.litres).toFixed(2)
@@ -842,6 +973,40 @@ function App() {
                         </div>
                     )}
                 </div>
+
+                {/* NEW: Ride Earnings Summary */}
+                {rideEntries.length > 0 && (
+                    <div className="card">
+                        <h2>🚖 Ride Earnings (This Month)</h2>
+                        <div className="stats-grid">
+                            <div className="stat-box">
+                                <div className="stat-label">Total Rides</div>
+                                <div className="stat-value" style={{ fontSize: '28px' }}>{rideSummary.totalRides}</div>
+                            </div>
+                            <div className="stat-box">
+                                <div className="stat-label">Distance</div>
+                                <div className="stat-value">{rideSummary.totalRideKm.toFixed(0)}<span className="stat-unit">km</span></div>
+                            </div>
+                            <div className="stat-box">
+                                <div className="stat-label">Earnings</div>
+                                <div className="stat-value" style={{ fontSize: '20px', color: '#4ecca3' }}>Rs. {rideSummary.totalEarnings.toFixed(0)}</div>
+                            </div>
+                            <div className="stat-box">
+                                <div className="stat-label">Fuel Cost</div>
+                                <div className="stat-value" style={{ fontSize: '20px', color: '#ee6c4d' }}>Rs. {rideSummary.totalFuelCost.toFixed(0)}</div>
+                            </div>
+                            <div className="stat-box full-width" style={{ background: 'linear-gradient(135deg, #1a4d6d 0%, #2a5f7f 100%)' }}>
+                                <div className="stat-label">💰 NET PROFIT</div>
+                                <div className="stat-value large" style={{ color: rideSummary.totalProfit > 0 ? '#4ecca3' : '#ee6c4d' }}>
+                                    Rs. {rideSummary.totalProfit.toFixed(2)}
+                                </div>
+                                <div style={{ color: '#93dac4', fontSize: '12px', marginTop: '5px' }}>
+                                    Rs. {rideSummary.avgProfitPerKm.toFixed(2)}/km • Rs. {rideSummary.avgProfitPerRide.toFixed(2)}/ride
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 <div className="card">
                     <h2>📊 This Month</h2>
@@ -1018,6 +1183,14 @@ function App() {
                             >
                                 ✏️ ADD MANUAL KM
                             </button>
+                            {/* NEW: Add Ride Entry Button */}
+                            <button
+                                className="btn btn-primary btn-lg"
+                                style={{ marginTop: '10px', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}
+                                onClick={handleRideEntryRequest}
+                            >
+                                🚖 ADD RIDE EARNINGS
+                            </button>
                         </>
                     ) : (
                         <button className="btn btn-danger btn-lg" onClick={stopTrip}>
@@ -1074,43 +1247,69 @@ function App() {
         );
     };
 
-    const renderHistory = () => {
+    // NEW: Render ride history
+    const renderRideHistory = () => {
         return (
             <div className="card">
-                <h2>📜 History</h2>
-                {petrolEntries.length === 0 ? (
+                <h2>🚖 Ride History</h2>
+                {rideEntries.length === 0 ? (
                     <div className="empty-state">
-                        <div className="empty-state-icon">📋</div>
-                        <p>No entries yet</p>
+                        <div className="empty-state-icon">🚗</div>
+                        <p>No ride entries yet</p>
+                        <p style={{ color: '#93dac4', fontSize: '13px', marginTop: '10px' }}>
+                            Add your first ride in the Track tab!
+                        </p>
                     </div>
                 ) : (
                     <div>
-                        {petrolEntries.map(entry => {
-                            const date = new Date(entry.date);
+                        {rideEntries.map(ride => {
+                            const date = new Date(ride.date);
                             const formattedDate = date.toLocaleDateString('en-IN', {
                                 day: '2-digit',
                                 month: 'short',
                                 year: 'numeric'
                             });
+                            const formattedTime = date.toLocaleTimeString('en-IN', {
+                                hour: '2-digit',
+                                minute: '2-digit'
+                            });
 
                             return (
-                                <div key={entry.id} className="history-item">
+                                <div key={ride.id} className="history-item" style={{
+                                    borderLeft: `4px solid ${ride.profit > 0 ? '#4ecca3' : '#ee6c4d'}`
+                                }}>
                                     <div className="history-header">
-                                        <div className="history-date">{formattedDate}</div>
-                                        <div className="history-mileage">
-                                            {entry.mileage > 0 ? entry.mileage : 'N/A'} km/L
+                                        <div className="history-date">{formattedDate} • {formattedTime}</div>
+                                        <div className="history-mileage" style={{
+                                            color: ride.profit > 0 ? '#4ecca3' : '#ee6c4d',
+                                            fontWeight: 'bold'
+                                        }}>
+                                            Rs. {ride.profit.toFixed(2)}
                                         </div>
                                     </div>
                                     <div className="history-details">
                                         <div className="history-detail">
-                                            Litres: <span>{entry.litres}L</span>
+                                            Distance: <span>{ride.km.toFixed(1)} km</span>
                                         </div>
                                         <div className="history-detail">
-                                            Cost: <span>Rs. {entry.totalCost.toFixed(0)}</span>
+                                            Earned: <span style={{ color: '#4ecca3' }}>Rs. {ride.earnings.toFixed(0)}</span>
                                         </div>
                                         <div className="history-detail">
-                                            Dist: <span>{entry.kmTraveled.toFixed(1)} km</span>
+                                            Fuel: <span>{ride.fuelUsed.toFixed(2)} L</span>
                                         </div>
+                                        <div className="history-detail">
+                                            Cost: <span style={{ color: '#ee6c4d' }}>Rs. {ride.fuelCost.toFixed(2)}</span>
+                                        </div>
+                                    </div>
+                                    <div style={{
+                                        marginTop: '8px',
+                                        padding: '8px',
+                                        background: 'rgba(66, 230, 207, 0.1)',
+                                        borderRadius: '6px',
+                                        fontSize: '12px',
+                                        color: '#93dac4'
+                                    }}>
+                                        💰 Profit/km: Rs. {ride.profitPerKm.toFixed(2)} | Cost/km: Rs. {ride.costPerKm.toFixed(2)}
                                     </div>
                                 </div>
                             );
@@ -1121,8 +1320,125 @@ function App() {
         );
     };
 
+    const renderHistory = () => {
+        return (
+            <div>
+                {renderRideHistory()}
+
+                <div className="card">
+                    <h2>📜 Fuel History</h2>
+                    {petrolEntries.length === 0 ? (
+                        <div className="empty-state">
+                            <div className="empty-state-icon">📋</div>
+                            <p>No entries yet</p>
+                        </div>
+                    ) : (
+                        <div>
+                            {petrolEntries.map(entry => {
+                                const date = new Date(entry.date);
+                                const formattedDate = date.toLocaleDateString('en-IN', {
+                                    day: '2-digit',
+                                    month: 'short',
+                                    year: 'numeric'
+                                });
+
+                                return (
+                                    <div key={entry.id} className="history-item">
+                                        <div className="history-header">
+                                            <div className="history-date">{formattedDate}</div>
+                                            <div className="history-mileage">
+                                                {entry.mileage > 0 ? entry.mileage : 'N/A'} km/L
+                                            </div>
+                                        </div>
+                                        <div className="history-details">
+                                            <div className="history-detail">
+                                                Litres: <span>{entry.litres}L</span>
+                                            </div>
+                                            <div className="history-detail">
+                                                Cost: <span>Rs. {entry.totalCost.toFixed(0)}</span>
+                                            </div>
+                                            <div className="history-detail">
+                                                Dist: <span>{entry.kmTraveled.toFixed(1)} km</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+            </div>
+        );
+    };
+
     return (
         <div className="App">
+            {/* NEW: Ride Entry Modal */}
+            {showRideEntry && (
+                <div className="modal-overlay">
+                    <div className="modal">
+                        <h2>🚖 Add Ride Earnings</h2>
+                        <p style={{ color: '#93dac4', fontSize: '14px', marginBottom: '15px' }}>
+                            Track your Uber/Careem/InDrive rides
+                        </p>
+
+                        <div className="input-group">
+                            <label htmlFor="rideKm">Distance (km)</label>
+                            <input
+                                type="number"
+                                id="rideKm"
+                                placeholder="e.g., 15"
+                                step="0.1"
+                                min="0"
+                                value={rideKm}
+                                onChange={(e) => setRideKm(e.target.value)}
+                                inputMode="decimal"
+                                autoFocus
+                                style={{ fontSize: '18px', padding: '15px', textAlign: 'center' }}
+                            />
+                        </div>
+
+                        <div className="input-group">
+                            <label htmlFor="rideEarnings">Earnings (Rs.)</label>
+                            <input
+                                type="number"
+                                id="rideEarnings"
+                                placeholder="e.g., 300"
+                                step="1"
+                                min="0"
+                                value={rideEarnings}
+                                onChange={(e) => setRideEarnings(e.target.value)}
+                                inputMode="decimal"
+                                style={{ fontSize: '18px', padding: '15px', textAlign: 'center' }}
+                            />
+                        </div>
+
+                        {petrolEntries.length === 0 && (
+                            <div style={{
+                                background: 'rgba(238, 108, 77, 0.1)',
+                                border: '1px solid #ee6c4d',
+                                borderRadius: '8px',
+                                padding: '12px',
+                                marginTop: '15px',
+                                fontSize: '13px',
+                                color: '#f4a261'
+                            }}>
+                                ⚠️ Add a fuel entry first for accurate profit calculation
+                            </div>
+                        )}
+
+                        <div className="modal-buttons">
+                            <button className="btn btn-success" onClick={saveRideEntry}>
+                                ✅ Calculate Profit
+                            </button>
+                            <button className="btn btn-secondary" onClick={cancelRideEntry}>
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {showManualEntry && (
                 <div className="modal-overlay">
                     <div className="modal">

@@ -24,11 +24,15 @@ function App() {
     const [showManualEntry, setShowManualEntry] = useState(false);
     const [manualKm, setManualKm] = useState('');
 
-    // NEW: Ride profit calculator states
+    // Ride profit calculator states
     const [showRideEntry, setShowRideEntry] = useState(false);
     const [rideKm, setRideKm] = useState('');
     const [rideEarnings, setRideEarnings] = useState('');
     const [rideEntries, setRideEntries] = useState([]);
+
+    // NEW: Trip type selection
+    const [showTripTypeDialog, setShowTripTypeDialog] = useState(false);
+    const [pendingTripType, setPendingTripType] = useState(null);
 
     const [gpsDebug, setGpsDebug] = useState({
         updates: 0,
@@ -42,7 +46,6 @@ function App() {
 
     const [smoothSpeed, setSmoothSpeed] = useState(0);
 
-    // Fixed: Animation frame cleanup
     useEffect(() => {
         if (!isTracking) {
             setSmoothSpeed(0);
@@ -137,7 +140,6 @@ function App() {
         showGpsMessage(message, true);
     }, [showGpsMessage]);
 
-    // Fixed: GPS position filtering logic
     const handlePositionUpdate = useCallback((position) => {
         positionCountRef.current += 1;
         const updateNum = positionCountRef.current;
@@ -289,7 +291,7 @@ function App() {
                     setTrips(data.trips || []);
                     setCurrentTrip(data.currentTrip || null);
                     setTotalKmSinceLastFill(data.totalKmSinceLastFill || 0);
-                    setRideEntries(data.rideEntries || []); // NEW: Load ride entries
+                    setRideEntries(data.rideEntries || []);
                 }
             } catch (error) {
                 console.error('Error loading data:', error);
@@ -305,7 +307,6 @@ function App() {
         setTodayDate();
     }, []);
 
-    // Fixed: localStorage error handling
     useEffect(() => {
         if (isInitialMount.current) {
             isInitialMount.current = false;
@@ -318,7 +319,7 @@ function App() {
                 trips,
                 currentTrip,
                 totalKmSinceLastFill,
-                rideEntries, // NEW: Save ride entries
+                rideEntries,
                 lastSaved: new Date().toISOString()
             };
 
@@ -330,7 +331,7 @@ function App() {
                     ...data,
                     petrolEntries: data.petrolEntries.slice(0, 50),
                     trips: data.trips.slice(0, 100),
-                    rideEntries: data.rideEntries.slice(0, 100) // NEW
+                    rideEntries: data.rideEntries.slice(0, 100)
                 };
                 localStorage.setItem('petrolTrackerData', JSON.stringify(trimmedData));
             } else {
@@ -345,7 +346,7 @@ function App() {
                     trips: trips.slice(0, 50),
                     currentTrip,
                     totalKmSinceLastFill,
-                    rideEntries: rideEntries.slice(0, 50), // NEW
+                    rideEntries: rideEntries.slice(0, 50),
                     lastSaved: new Date().toISOString()
                 };
                 try {
@@ -357,7 +358,7 @@ function App() {
                 console.error('Storage error:', error);
             }
         }
-    }, [petrolEntries, trips, currentTrip, totalKmSinceLastFill, rideEntries]); // NEW: Added rideEntries
+    }, [petrolEntries, trips, currentTrip, totalKmSinceLastFill, rideEntries]);
 
     useEffect(() => {
         const handler = (e) => {
@@ -392,7 +393,7 @@ function App() {
         setTrips([]);
         setCurrentTrip(null);
         setTotalKmSinceLastFill(0);
-        setRideEntries([]); // NEW: Reset ride entries
+        setRideEntries([]);
         setLitres('');
         setPricePerLitre('');
         const today = new Date().toISOString().split('T')[0];
@@ -535,7 +536,6 @@ function App() {
         setShowManualEntry(false);
     };
 
-    // NEW: Ride entry handlers
     const handleRideEntryRequest = () => {
         setShowRideEntry(true);
     };
@@ -562,7 +562,6 @@ function App() {
         const roundedKm = Math.round(kmNum * 100) / 100;
         const roundedEarnings = Math.round(earningsNum * 100) / 100;
 
-        // Calculate fuel cost
         const lastEntry = petrolEntries[0];
         let costPerKm = 0;
         let fuelUsed = 0;
@@ -574,7 +573,7 @@ function App() {
                     totalKmSinceLastFill / lastEntry.litres : 0);
 
             if (mileage > 0) {
-                fuelUsed = roundedKm / mileage; // litres
+                fuelUsed = roundedKm / mileage;
                 fuelCost = fuelUsed * lastEntry.pricePerLitre;
                 costPerKm = lastEntry.pricePerLitre / mileage;
             }
@@ -596,8 +595,6 @@ function App() {
         };
 
         setRideEntries(prev => [rideEntry, ...prev]);
-
-        // Add to total km
         setTotalKmSinceLastFill(prev => prev + roundedKm);
 
         const rideTrip = {
@@ -616,7 +613,6 @@ function App() {
         setRideEarnings('');
         setShowRideEntry(false);
 
-        // Show detailed summary
         alert(`✅ Ride Saved!\n\n` +
             `Distance: ${roundedKm} km\n` +
             `Earnings: Rs. ${roundedEarnings}\n` +
@@ -634,7 +630,52 @@ function App() {
         setShowRideEntry(false);
     };
 
-    const startTrip = () => {
+    // NEW: Handle trip type selection dialog
+    const handleStartTripRequest = () => {
+        setShowTripTypeDialog(true);
+    };
+
+    const startTripWithType = (isRideTrip) => {
+        setShowTripTypeDialog(false);
+        setPendingTripType(isRideTrip ? 'ride' : 'personal');
+
+        if (isRideTrip) {
+            // Show ride earnings input immediately
+            setShowRideEntry(true);
+        } else {
+            // Start GPS tracking for personal trip
+            startGPSTracking(false);
+        }
+    };
+
+    const cancelTripTypeSelection = () => {
+        setShowTripTypeDialog(false);
+        setPendingTripType(null);
+    };
+
+    // NEW: Start GPS with ride earnings after input
+    const startRideWithGPS = () => {
+        const kmNum = parseFloat(rideKm);
+        const earningsNum = parseFloat(rideEarnings);
+
+        if (isNaN(kmNum) || !isFinite(kmNum) || kmNum <= 0) {
+            alert('❌ Please enter valid kilometers!');
+            return;
+        }
+
+        if (isNaN(earningsNum) || !isFinite(earningsNum) || earningsNum < 0) {
+            alert('❌ Please enter valid earnings!');
+            return;
+        }
+
+        // Close the dialog
+        setShowRideEntry(false);
+
+        // Start GPS tracking with ride info
+        startGPSTracking(true, parseFloat(rideKm), parseFloat(rideEarnings));
+    };
+
+    const startGPSTracking = (isRideTrip = false, expectedKm = 0, expectedEarnings = 0) => {
         if (!navigator.geolocation) {
             alert('❌ GPS not supported');
             return;
@@ -656,7 +697,10 @@ function App() {
             id: Date.now(),
             startTime: new Date().toISOString(),
             distance: 0,
-            isActive: true
+            isActive: true,
+            isRide: isRideTrip,
+            expectedKm: expectedKm,
+            expectedEarnings: expectedEarnings
         };
 
         setCurrentTrip(newTrip);
@@ -676,8 +720,9 @@ function App() {
             );
 
             const accuracyMode = highAccuracy ? 'High Accuracy' : 'Standard';
-            showGpsMessage('🟢 GPS Active (' + accuracyMode + ')', false);
-            setGpsDebug(prev => ({ ...prev, status: 'Tracking active (' + accuracyMode + ')' }));
+            const tripType = isRideTrip ? '🚖 Ride' : '🏍️ Personal';
+            showGpsMessage('🟢 GPS Active (' + tripType + ' - ' + accuracyMode + ')', false);
+            setGpsDebug(prev => ({ ...prev, status: 'Tracking ' + tripType + ' (' + accuracyMode + ')' }));
         };
 
         navigator.geolocation.getCurrentPosition(
@@ -742,6 +787,7 @@ function App() {
         }
 
         if (currentTrip) {
+            const actualKm = currentTrip.distance;
             const completedTrip = {
                 ...currentTrip,
                 endTime: new Date().toISOString(),
@@ -749,6 +795,58 @@ function App() {
             };
 
             setTrips(prev => [...prev, completedTrip]);
+
+            // If it was a ride trip, calculate and save ride entry
+            if (currentTrip.isRide && currentTrip.expectedEarnings > 0) {
+                const lastEntry = petrolEntries[0];
+                let costPerKm = 0;
+                let fuelUsed = 0;
+                let fuelCost = 0;
+
+                if (lastEntry) {
+                    const mileage = lastEntry.mileage > 0 ? parseFloat(lastEntry.mileage) :
+                        (lastEntry.litres > 0 && totalKmSinceLastFill > 0 ?
+                            totalKmSinceLastFill / lastEntry.litres : 0);
+
+                    if (mileage > 0) {
+                        fuelUsed = actualKm / mileage;
+                        fuelCost = fuelUsed * lastEntry.pricePerLitre;
+                        costPerKm = lastEntry.pricePerLitre / mileage;
+                    }
+                }
+
+                const profit = currentTrip.expectedEarnings - fuelCost;
+                const profitPerKm = actualKm > 0 ? profit / actualKm : 0;
+
+                const rideEntry = {
+                    id: Date.now(),
+                    date: new Date().toISOString(),
+                    km: actualKm,
+                    expectedKm: currentTrip.expectedKm,
+                    earnings: currentTrip.expectedEarnings,
+                    fuelUsed: fuelUsed,
+                    fuelCost: fuelCost,
+                    profit: profit,
+                    profitPerKm: profitPerKm,
+                    costPerKm: costPerKm
+                };
+
+                setRideEntries(prev => [rideEntry, ...prev]);
+
+                // Show detailed summary
+                alert(`✅ Ride Completed!\n\n` +
+                    `Expected: ${currentTrip.expectedKm.toFixed(1)} km\n` +
+                    `Actual: ${actualKm.toFixed(2)} km\n` +
+                    `Difference: ${(actualKm - currentTrip.expectedKm).toFixed(2)} km\n\n` +
+                    `Earnings: Rs. ${currentTrip.expectedEarnings}\n` +
+                    `Fuel Used: ${fuelUsed.toFixed(2)} L\n` +
+                    `Fuel Cost: Rs. ${fuelCost.toFixed(2)}\n` +
+                    `━━━━━━━━━━━━━━━\n` +
+                    `💰 Profit: Rs. ${profit.toFixed(2)}\n` +
+                    `Per KM: Rs. ${profitPerKm.toFixed(2)}/km`
+                );
+            }
+
             setCurrentTrip(null);
         }
 
@@ -758,7 +856,10 @@ function App() {
         isFirstPositionAfterStart.current = true;
         setIsTracking(false);
         setGpsDebug(prev => ({ ...prev, status: 'Stopped', speed: 0 }));
-        showGpsMessage('⏸️ Stopped', false);
+        setPendingTripType(null);
+        setRideKm('');
+        setRideEarnings('');
+        showGpsMessage('⏸️ Trip Stopped', false);
     };
 
     const getMonthlySummary = () => {
@@ -790,7 +891,6 @@ function App() {
         return { totalLitres, totalSpent, totalKm, avgMileage };
     };
 
-    // NEW: Get ride summary
     const getRideSummary = () => {
         const now = new Date();
         const currentMonth = now.getMonth();
@@ -828,7 +928,6 @@ function App() {
         };
     };
 
-    // Memoized Speedometer Component
     const SpeedometerComponent = useMemo(() => {
         return ({ speed }) => {
             const maxSpeed = 120;
@@ -922,7 +1021,7 @@ function App() {
 
     const renderDashboard = () => {
         const monthly = getMonthlySummary();
-        const rideSummary = getRideSummary(); // NEW
+        const rideSummary = getRideSummary();
         const lastEntry = petrolEntries[0];
         const currentMileage = lastEntry && totalKmSinceLastFill > 0
             ? (totalKmSinceLastFill / lastEntry.litres).toFixed(2)
@@ -974,7 +1073,6 @@ function App() {
                     )}
                 </div>
 
-                {/* NEW: Ride Earnings Summary */}
                 {rideEntries.length > 0 && (
                     <div className="card">
                         <h2>🚖 Ride Earnings (This Month)</h2>
@@ -1138,6 +1236,27 @@ function App() {
 
                     {isTracking && <Speedometer speed={smoothSpeed} />}
 
+                    {/* NEW: Show trip type badge if tracking */}
+                    {isTracking && currentTrip && (
+                        <div style={{
+                            background: currentTrip.isRide ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : 'linear-gradient(135deg, #4ecca3 0%, #3baf84 100%)',
+                            padding: '10px 15px',
+                            borderRadius: '8px',
+                            textAlign: 'center',
+                            marginBottom: '15px',
+                            color: 'white',
+                            fontWeight: 'bold',
+                            fontSize: '14px'
+                        }}>
+                            {currentTrip.isRide ? '🚖 RIDE TRIP' : '🏍️ PERSONAL TRIP'}
+                            {currentTrip.isRide && currentTrip.expectedKm > 0 && (
+                                <div style={{ fontSize: '12px', marginTop: '5px', opacity: 0.9 }}>
+                                    Expected: {currentTrip.expectedKm.toFixed(1)} km • Rs. {currentTrip.expectedEarnings}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
                     <div style={{
                         background: isTracking ? 'linear-gradient(135deg, #1a4d6d 0%, #0f3460 100%)' : '#0f3460',
                         padding: '12px',
@@ -1173,8 +1292,8 @@ function App() {
 
                     {!isTracking ? (
                         <>
-                            <button className="btn btn-success btn-lg" onClick={startTrip}>
-                                ▶️ START GPS
+                            <button className="btn btn-success btn-lg" onClick={handleStartTripRequest}>
+                                ▶️ START GPS TRACKING
                             </button>
                             <button
                                 className="btn btn-secondary btn-lg"
@@ -1183,13 +1302,12 @@ function App() {
                             >
                                 ✏️ ADD MANUAL KM
                             </button>
-                            {/* NEW: Add Ride Entry Button */}
                             <button
                                 className="btn btn-primary btn-lg"
                                 style={{ marginTop: '10px', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}
                                 onClick={handleRideEntryRequest}
                             >
-                                🚖 ADD RIDE EARNINGS
+                                🚖 ADD RIDE (WITHOUT GPS)
                             </button>
                         </>
                     ) : (
@@ -1247,7 +1365,6 @@ function App() {
         );
     };
 
-    // NEW: Render ride history
     const renderRideHistory = () => {
         return (
             <div className="card">
@@ -1290,6 +1407,11 @@ function App() {
                                     <div className="history-details">
                                         <div className="history-detail">
                                             Distance: <span>{ride.km.toFixed(1)} km</span>
+                                            {ride.expectedKm && ride.expectedKm !== ride.km && (
+                                                <span style={{ color: '#f4a261', fontSize: '11px', marginLeft: '5px' }}>
+                                                    (exp: {ride.expectedKm.toFixed(1)})
+                                                </span>
+                                            )}
                                         </div>
                                         <div className="history-detail">
                                             Earned: <span style={{ color: '#4ecca3' }}>Rs. {ride.earnings.toFixed(0)}</span>
@@ -1373,13 +1495,101 @@ function App() {
 
     return (
         <div className="App">
-            {/* NEW: Ride Entry Modal */}
-            {showRideEntry && (
+            {/* NEW: Trip Type Selection Dialog */}
+            {showTripTypeDialog && (
+                <div className="modal-overlay">
+                    <div className="modal">
+                        <h2>🚗 Select Trip Type</h2>
+                        <p style={{ color: '#93dac4', fontSize: '14px', marginBottom: '20px' }}>
+                            Is this a ride (Uber/Careem/InDrive) or personal trip?
+                        </p>
+
+                        <div className="modal-buttons">
+                            <button
+                                className="btn btn-primary"
+                                style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}
+                                onClick={() => startTripWithType(true)}
+                            >
+                                🚖 Ride Trip (With Earnings)
+                            </button>
+                            <button
+                                className="btn btn-success"
+                                onClick={() => startTripWithType(false)}
+                            >
+                                🏍️ Personal Trip
+                            </button>
+                            <button className="btn btn-secondary" onClick={cancelTripTypeSelection}>
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modified: Ride Entry Modal for GPS tracking */}
+            {showRideEntry && pendingTripType === 'ride' && (
+                <div className="modal-overlay">
+                    <div className="modal">
+                        <h2>🚖 Ride Details</h2>
+                        <p style={{ color: '#93dac4', fontSize: '14px', marginBottom: '15px' }}>
+                            Enter expected ride details before starting GPS
+                        </p>
+
+                        <div className="input-group">
+                            <label htmlFor="rideKm">Expected Distance (km)</label>
+                            <input
+                                type="number"
+                                id="rideKm"
+                                placeholder="e.g., 15"
+                                step="0.1"
+                                min="0"
+                                value={rideKm}
+                                onChange={(e) => setRideKm(e.target.value)}
+                                inputMode="decimal"
+                                autoFocus
+                                style={{ fontSize: '18px', padding: '15px', textAlign: 'center' }}
+                            />
+                        </div>
+
+                        <div className="input-group">
+                            <label htmlFor="rideEarnings">Earnings (Rs.)</label>
+                            <input
+                                type="number"
+                                id="rideEarnings"
+                                placeholder="e.g., 300"
+                                step="1"
+                                min="0"
+                                value={rideEarnings}
+                                onChange={(e) => setRideEarnings(e.target.value)}
+                                inputMode="decimal"
+                                style={{ fontSize: '18px', padding: '15px', textAlign: 'center' }}
+                            />
+                        </div>
+
+                        <div className="modal-buttons">
+                            <button className="btn btn-success" onClick={startRideWithGPS}>
+                                ▶️ Start GPS Tracking
+                            </button>
+                            <button className="btn btn-secondary" onClick={() => {
+                                setShowRideEntry(false);
+                                setPendingTripType(null);
+                                setRideKm('');
+                                setRideEarnings('');
+                            }}>
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Original: Ride Entry Modal without GPS */}
+            {showRideEntry && !pendingTripType && (
                 <div className="modal-overlay">
                     <div className="modal">
                         <h2>🚖 Add Ride Earnings</h2>
                         <p style={{ color: '#93dac4', fontSize: '14px', marginBottom: '15px' }}>
-                            Track your Uber/Careem/InDrive rides
+                            Manual entry (without GPS tracking)
                         </p>
 
                         <div className="input-group">

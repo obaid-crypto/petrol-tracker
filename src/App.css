@@ -1011,3 +1011,624 @@ input:focus-visible {
         page-break-inside: avoid;
     }
 }
+/* NEW: Ride Completion Dialog Enhancements */
+.ride-completion-distance {
+    background: rgba(78, 204, 163, 0.1);
+    border: 2px solid #4ecca3;
+    border-radius: 10px;
+    padding: 15px;
+    margin-bottom: 20px;
+    text-align: center;
+    animation: fadeIn 0.5s ease-out;
+}
+
+.ride-completion-label {
+    color: #93dac4;
+    font-size: 13px;
+    margin-bottom: 5px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.ride-completion-value {
+    color: #4ecca3;
+    font-size: 32px;
+    font-weight: bold;
+    text-shadow: 0 0 10px rgba(78, 204, 163, 0.3);
+}
+
+/* Tip input special styling */
+.tip-input-wrapper {
+    position: relative;
+}
+
+    .tip-input-wrapper::before {
+        content: '🎁';
+        position: absolute;
+        left: 15px;
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: 20px;
+        pointer-events: none;
+        z-index: 1;
+    }
+
+    .tip-input-wrapper input {
+        padding-left: 45px;
+    }
+
+/* Earnings summary in modal */
+.earnings-summary {
+    background: linear-gradient(135deg, #1a4d6d 0%, #0f3460 100%);
+    border: 1px solid #4ecca3;
+    border-radius: 10px;
+    padding: 12px;
+    margin-top: 15px;
+    font-size: 13px;
+    color: #93dac4;
+}
+
+.earnings-summary-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(78, 204, 163, 0.1);
+}
+
+    .earnings-summary-row:last-child {
+        border-bottom: none;
+        padding-top: 10px;
+        margin-top: 5px;
+        border-top: 2px solid #4ecca3;
+        font-weight: bold;
+        color: #4ecca3;
+    }
+
+.earnings-summary-label {
+    color: #93dac4;
+}
+
+.earnings-summary-value {
+    color: #4ecca3;
+    font-weight: bold;
+}
+
+/* Trip type badge animation */
+.trip-type-badge {
+    animation: badgePulse 2s infinite;
+}
+
+@keyframes badgePulse {
+    0%, 100% {
+        box-shadow: 0 0 10px rgba(102, 126, 234, 0.3);
+    }
+
+    50% {
+        box-shadow: 0 0 20px rgba(102, 126, 234, 0.6);
+    }
+}
+
+/* Ride vs Personal trip button distinction */
+.btn-ride-trip {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    position: relative;
+    overflow: hidden;
+}
+
+    .btn-ride-trip::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+        transition: left 0.5s;
+    }
+
+    .btn-ride-trip:hover::before {
+        left: 100%;
+    }
+
+.btn-personal-trip {
+    background: linear-gradient(135deg, #4ecca3 0%, #3baf84 100%);
+}
+
+/* Trip button subtitle */
+.btn-subtitle {
+    font-size: 12px;
+    margin-top: 5px;
+    opacity: 0.9;
+    font-weight: normal;
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+/* Enhanced tip badge in history */
+.tip-badge {
+    display: inline-block;
+    background: linear-gradient(135deg, #f4a261 0%, #e76f51 100%);
+    color: white;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: bold;
+    margin-left: 5px;
+    animation: tipShine 2s infinite;
+}
+
+@keyframes tipShine {
+    0%, 100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.8;
+    }
+}
+
+/* Completed ride success message */
+.ride-complete-success {
+    background: rgba(78, 204, 163, 0.15);
+    border: 2px solid #4ecca3;
+    border-radius: 10px;
+    padding: 15px;
+    margin: 15px 0;
+    text-align: center;
+    animation: successPulse 0.6s ease-in-out;
+}
+
+.ride-complete-icon {
+    font-size: 48px;
+    margin-bottom: 10px;
+}
+
+.ride-complete-text {
+    color: #4ecca3;
+    font-size: 16px;
+    font-weight: bold;
+}
+
+/* Stats highlight on dashboard for ride earnings */
+.ride-earnings-highlight {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: none !important;
+    position: relative;
+}
+
+    .ride-earnings-highlight::after {
+        content: '🚖';
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        font-size: 20px;
+        opacity: 0.3;
+    }
+
+/* Modal max height for small screens */
+@media (max-height: 700px) {
+    .modal {
+        max-height: 85vh;
+        overflow-y: auto;
+    }
+}
+
+/* Landscape orientation adjustments */
+@media (max-height: 500px) and (orientation: landscape) {
+    .modal {
+        max-height: 90vh;
+        padding: 15px;
+    }
+
+        .modal h2 {
+            font-size: 18px;
+            margin-bottom: 10px;
+        }
+
+    .input-group {
+        margin-bottom: 10px;
+    }
+
+    .btn {
+        padding: 12px;
+        font-size: 14px;
+    }
+
+    .ride-completion-distance {
+        padding: 10px;
+        margin-bottom: 10px;
+    }
+
+    .ride-completion-value {
+        font-size: 24px;
+    }
+}
+
+/* Extra small screens */
+@media (max-width: 360px) {
+    .ride-completion-value {
+        font-size: 28px;
+    }
+
+    .earnings-summary {
+        font-size: 12px;
+    }
+
+    .modal-buttons .btn {
+        padding: 12px;
+        font-size: 14px;
+    }
+}
+
+/* Dark mode enhancement (if OS prefers dark) */
+@media (prefers-color-scheme: dark) {
+    .modal-overlay {
+        background: rgba(0, 0, 0, 0.92);
+    }
+}
+
+/* Reduce motion for accessibility */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+
+    .trip-type-badge,
+    .tip-badge,
+    .btn-ride-trip::before {
+        animation: none !important;
+    }
+}
+
+/* High contrast mode */
+@media (prefers-contrast: high) {
+    .btn {
+        border: 2px solid currentColor;
+    }
+
+    .modal {
+        border: 3px solid #4ecca3;
+    }
+
+    .ride-completion-distance {
+        border: 3px solid #4ecca3;
+    }
+}
+/* ========================================
+   FARE CALCULATOR SPECIFIC STYLES
+   ======================================== */
+
+/* Calculator button gradient */
+.btn-calculator {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%) !important;
+    color: white !important;
+    box-shadow: 0 4px 15px rgba(240, 147, 251, 0.3);
+}
+
+    .btn-calculator:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(240, 147, 251, 0.5);
+    }
+
+/* Calculator result sections */
+.calc-result-section {
+    background: linear-gradient(135deg, #1a4d6d 0%, #0f3460 100%);
+    border: 2px solid #4ecca3;
+    border-radius: 12px;
+    padding: 15px;
+    margin-top: 15px;
+    animation: slideIn 0.3s ease-out;
+}
+
+.calc-section-header {
+    text-align: center;
+    color: #4ecca3;
+    font-size: 14px;
+    margin-bottom: 12px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+/* Fuel cost box */
+.calc-fuel-box {
+    background: rgba(238, 108, 77, 0.1);
+    padding: 10px;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    border: 1px solid #ee6c4d;
+}
+
+/* Offer box */
+.calc-offer-box {
+    background: rgba(78, 204, 163, 0.1);
+    padding: 10px;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    border: 1px solid #4ecca3;
+}
+
+/* Counter offer box */
+.calc-counter-box {
+    background: rgba(102, 126, 234, 0.15);
+    padding: 10px;
+    border-radius: 8px;
+    border: 2px solid #667eea;
+}
+
+/* Profit display */
+.calc-profit-positive {
+    color: #4ecca3 !important;
+    font-weight: bold;
+}
+
+.calc-profit-negative {
+    color: #ee6c4d !important;
+    font-weight: bold;
+}
+
+/* Recommendation badge */
+.calc-recommendation {
+    margin-top: 12px;
+    padding: 10px;
+    border-radius: 8px;
+    text-align: center;
+    font-size: 13px;
+    font-weight: 500;
+    animation: fadeIn 0.5s ease-out;
+}
+
+    .calc-recommendation.good {
+        background: rgba(78, 204, 163, 0.1);
+        border: 1px solid #4ecca3;
+        color: #4ecca3;
+    }
+
+    .calc-recommendation.bad {
+        background: rgba(238, 108, 77, 0.1);
+        border: 1px solid #ee6c4d;
+        color: #f4a261;
+    }
+
+/* Comparison rows */
+.calc-comparison-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 13px;
+    padding: 5px 0;
+}
+
+.calc-comparison-label {
+    color: #93dac4;
+}
+
+.calc-comparison-value {
+    color: #e8e8e8;
+    font-weight: bold;
+}
+
+/* Large profit display */
+.calc-profit-large {
+    font-size: 18px !important;
+    margin-top: 8px;
+}
+
+/* Divider in counter box */
+.calc-divider {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(102, 126, 234, 0.3);
+}
+
+/* Extra earnings highlight */
+.calc-extra-earning {
+    display: flex;
+    justify-content: space-between;
+    font-size: 13px;
+    margin-top: 5px;
+}
+
+    .calc-extra-earning.positive .calc-comparison-value {
+        color: #4ecca3;
+    }
+
+    .calc-extra-earning.negative .calc-comparison-value {
+        color: #ee6c4d;
+    }
+
+/* Calculator icon animation */
+@keyframes calculatorPulse {
+    0%, 100% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(1.05);
+    }
+}
+
+.btn-calculator:active {
+    animation: calculatorPulse 0.3s ease-in-out;
+}
+
+/* Per km profit badge */
+.calc-perkm-badge {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: bold;
+    margin-left: 5px;
+}
+
+    .calc-perkm-badge.good {
+        background: rgba(78, 204, 163, 0.2);
+        color: #4ecca3;
+        border: 1px solid #4ecca3;
+    }
+
+    .calc-perkm-badge.bad {
+        background: rgba(238, 108, 77, 0.2);
+        color: #ee6c4d;
+        border: 1px solid #ee6c4d;
+    }
+
+/* Modal wider for calculator */
+.modal.calculator-modal {
+    max-width: 450px;
+}
+
+/* Responsive adjustments for calculator */
+@media (max-width: 480px) {
+    .calc-comparison-row {
+        font-size: 12px;
+    }
+
+    .calc-profit-large {
+        font-size: 16px !important;
+    }
+
+    .calc-section-header {
+        font-size: 13px;
+    }
+
+    .modal.calculator-modal {
+        max-width: 100%;
+        margin: 10px;
+    }
+}
+
+/* Calculation loading state */
+@keyframes calcLoading {
+    0% {
+        opacity: 0.6;
+    }
+
+    50% {
+        opacity: 1;
+    }
+
+    100% {
+        opacity: 0.6;
+    }
+}
+
+.calc-loading {
+    animation: calcLoading 1.5s infinite;
+}
+
+/* Success checkmark for good deals */
+.calc-checkmark {
+    display: inline-block;
+    font-size: 18px;
+    color: #4ecca3;
+    margin-right: 5px;
+}
+
+/* Warning icon for bad deals */
+.calc-warning {
+    display: inline-block;
+    font-size: 18px;
+    color: #ee6c4d;
+    margin-right: 5px;
+}
+
+/* Counter offer highlight glow */
+@keyframes counterGlow {
+    0%, 100% {
+        box-shadow: 0 0 5px rgba(102, 126, 234, 0.3);
+    }
+
+    50% {
+        box-shadow: 0 0 15px rgba(102, 126, 234, 0.6);
+    }
+}
+
+.calc-counter-box {
+    animation: counterGlow 2s infinite;
+}
+
+/* Mobile landscape specific */
+@media (max-height: 600px) and (orientation: landscape) {
+    .calc-result-section {
+        max-height: 50vh;
+        overflow-y: auto;
+        scrollbar-width: thin;
+    }
+
+        .calc-result-section::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .calc-result-section::-webkit-scrollbar-thumb {
+            background: #4ecca3;
+            border-radius: 2px;
+        }
+}
+
+/* Print styles for calculator */
+@media print {
+    .calc-result-section {
+        border: 2px solid #000 !important;
+        page-break-inside: avoid;
+    }
+
+    .calc-recommendation {
+        border: 1px solid #000 !important;
+    }
+}
+
+/* Dark mode enhancement for calculator */
+@media (prefers-color-scheme: dark) {
+    .calc-fuel-box,
+    .calc-offer-box,
+    .calc-counter-box {
+        backdrop-filter: blur(10px);
+    }
+}
+
+/* High contrast mode for calculator */
+@media (prefers-contrast: high) {
+    .calc-fuel-box,
+    .calc-offer-box,
+    .calc-counter-box {
+        border-width: 3px;
+    }
+
+    .calc-profit-positive,
+    .calc-profit-negative {
+        text-decoration: underline;
+    }
+}
+
+/* Tooltip style for calculator hints */
+.calc-tooltip {
+    position: relative;
+    cursor: help;
+}
+
+    .calc-tooltip::after {
+        content: attr(data-tooltip);
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #0f3460;
+        color: #4ecca3;
+        padding: 5px 10px;
+        border-radius: 5px;
+        font-size: 11px;
+        white-space: nowrap;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.3s;
+        border: 1px solid #4ecca3;
+    }
+
+    .calc-tooltip:hover::after {
+        opacity: 1;
+    }

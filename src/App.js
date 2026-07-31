@@ -24,19 +24,22 @@ function App() {
     const [showManualEntry, setShowManualEntry] = useState(false);
     const [manualKm, setManualKm] = useState('');
 
-    // Ride profit calculator states
     const [showRideEntry, setShowRideEntry] = useState(false);
     const [rideKm, setRideKm] = useState('');
     const [rideEarnings, setRideEarnings] = useState('');
-    const [rideTip, setRideTip] = useState(''); // NEW: Tip amount
+    const [rideTip, setRideTip] = useState('');
     const [rideEntries, setRideEntries] = useState([]);
 
-    // Trip type selection
     const [showTripTypeDialog, setShowTripTypeDialog] = useState(false);
-
-    // NEW: Ride completion dialog
     const [showRideCompletionDialog, setShowRideCompletionDialog] = useState(false);
     const [completedRideKm, setCompletedRideKm] = useState(0);
+
+    // NEW: Fare Calculator States
+    const [showFareCalculator, setShowFareCalculator] = useState(false);
+    const [calcKm, setCalcKm] = useState('');
+    const [calcOffer, setCalcOffer] = useState('');
+    const [calcMyPrice, setCalcMyPrice] = useState('');
+    const [calculationResult, setCalculationResult] = useState(null);
 
     const [gpsDebug, setGpsDebug] = useState({
         updates: 0,
@@ -65,8 +68,7 @@ function App() {
                 if (Math.abs(diff) < 0.05) {
                     return targetSpeed;
                 }
-                const step = diff * 0.06;
-                return prev + step;
+                return prev + (diff * 0.06);
             });
             animationFrameId = requestAnimationFrame(animate);
         };
@@ -148,13 +150,6 @@ function App() {
         positionCountRef.current += 1;
         const updateNum = positionCountRef.current;
 
-        console.log(`\n========== GPS Update #${updateNum} ==========`);
-        console.log('Time:', new Date().toLocaleTimeString());
-        console.log('Lat:', position.coords.latitude.toFixed(8));
-        console.log('Lng:', position.coords.longitude.toFixed(8));
-        console.log('Accuracy:', position.coords.accuracy.toFixed(1), 'm');
-        console.log('Speed:', position.coords.speed, 'm/s');
-
         const newPosition = {
             lat: position.coords.latitude,
             lng: position.coords.longitude,
@@ -179,11 +174,9 @@ function App() {
         });
 
         if (isFirstPositionAfterStart.current) {
-            console.log('ℹ️ First position after start - reference point');
             lastPositionRef.current = newPosition;
             positionHistoryRef.current = [newPosition];
             isFirstPositionAfterStart.current = false;
-            console.log('==========================================\n');
             return;
         }
 
@@ -196,93 +189,45 @@ function App() {
             );
 
             const distanceMeters = distance * 1000;
-            console.log('Distance from last:', distanceMeters.toFixed(2), 'm');
-
             let shouldUpdate = false;
-            let reason = '';
 
             if (distanceMeters < 10) {
-                reason = 'Distance < 10m (GPS drift)';
-                console.log('⏭️', reason);
                 shouldUpdate = false;
-            }
-            else if (position.coords.accuracy > 30) {
-                reason = 'Accuracy poor (' + position.coords.accuracy.toFixed(0) + 'm)';
-                console.log('⏭️', reason);
+            } else if (position.coords.accuracy > 30) {
                 shouldUpdate = false;
-            }
-            else if (position.coords.speed !== null && position.coords.speed < 0.5) {
-                if (distanceMeters < 15) {
-                    reason = 'Low speed and small distance';
-                    console.log('⏭️', reason);
-                    shouldUpdate = false;
-                } else {
-                    shouldUpdate = true;
-                    reason = 'Distance significant despite low speed';
-                }
-            }
-            else if (positionHistoryRef.current.length >= 3) {
+            } else if (position.coords.speed !== null && position.coords.speed < 0.5) {
+                shouldUpdate = distanceMeters >= 15;
+            } else if (positionHistoryRef.current.length >= 3) {
                 let totalDistance = 0;
                 for (let i = 1; i < positionHistoryRef.current.length; i++) {
                     const prev = positionHistoryRef.current[i - 1];
                     const curr = positionHistoryRef.current[i];
                     totalDistance += calculateDistance(prev.lat, prev.lng, curr.lat, curr.lng) * 1000;
                 }
-
-                console.log('Total over', positionHistoryRef.current.length, 'points:', totalDistance.toFixed(2), 'm');
-
-                if (totalDistance > 20) {
-                    shouldUpdate = true;
-                    reason = 'Consistent movement';
-                } else if (distanceMeters > 20) {
-                    shouldUpdate = true;
-                    reason = 'Large single movement';
-                } else {
-                    reason = 'Total movement too small (drift)';
-                    console.log('⏭️', reason);
-                    shouldUpdate = false;
-                }
-            }
-            else if (distanceMeters > 20) {
+                shouldUpdate = totalDistance > 20 || distanceMeters > 20;
+            } else if (distanceMeters > 20) {
                 shouldUpdate = true;
-                reason = 'Large movement detected';
-            }
-            else {
+            } else {
                 shouldUpdate = true;
-                reason = 'Normal movement';
             }
 
             if (shouldUpdate) {
-                console.log('✅ UPDATING -', reason);
-                console.log('Adding:', distanceMeters.toFixed(2), 'm');
-
                 setCurrentTrip(prev => {
                     if (!prev) return prev;
-                    const newDistance = prev.distance + distance;
-                    console.log('Trip:', prev.distance.toFixed(6), '→', newDistance.toFixed(6), 'km');
-                    return { ...prev, distance: newDistance };
+                    return { ...prev, distance: prev.distance + distance };
                 });
 
-                setTotalKmSinceLastFill(prev => {
-                    const newTotal = prev + distance;
-                    console.log('Total:', prev.toFixed(6), '→', newTotal.toFixed(6), 'km');
-                    return newTotal;
-                });
-
+                setTotalKmSinceLastFill(prev => prev + distance);
                 setGpsDebug(prev => ({ ...prev, lastDistance: distanceMeters }));
                 lastPositionRef.current = newPosition;
                 positionHistoryRef.current = [newPosition];
             } else {
-                console.log('⏭️ Skipped -', reason);
                 setGpsDebug(prev => ({ ...prev, lastDistance: 0 }));
             }
         } else {
-            console.log('ℹ️ Setting initial reference point');
             lastPositionRef.current = newPosition;
             positionHistoryRef.current = [newPosition];
         }
-
-        console.log('==========================================\n');
     }, [calculateDistance]);
 
     useEffect(() => {
@@ -328,9 +273,7 @@ function App() {
             };
 
             const dataString = JSON.stringify(data);
-
             if (dataString.length > 5000000) {
-                console.warn('Data size approaching limit');
                 const trimmedData = {
                     ...data,
                     petrolEntries: data.petrolEntries.slice(0, 50),
@@ -342,25 +285,7 @@ function App() {
                 localStorage.setItem('petrolTrackerData', dataString);
             }
         } catch (error) {
-            if (error.name === 'QuotaExceededError') {
-                console.error('Storage quota exceeded');
-                alert('⚠️ Storage full! Some old data may be removed.');
-                const emergencyData = {
-                    petrolEntries: petrolEntries.slice(0, 20),
-                    trips: trips.slice(0, 50),
-                    currentTrip,
-                    totalKmSinceLastFill,
-                    rideEntries: rideEntries.slice(0, 50),
-                    lastSaved: new Date().toISOString()
-                };
-                try {
-                    localStorage.setItem('petrolTrackerData', JSON.stringify(emergencyData));
-                } catch (e) {
-                    console.error('Emergency save failed:', e);
-                }
-            } else {
-                console.error('Storage error:', error);
-            }
+            console.error('Storage error:', error);
         }
     }, [petrolEntries, trips, currentTrip, totalKmSinceLastFill, rideEntries]);
 
@@ -419,10 +344,8 @@ function App() {
         });
 
         localStorage.removeItem('petrolTrackerData');
-
         setShowResetConfirm(false);
         setActiveScreen('dashboard');
-
         alert('✅ All data reset!');
     };
 
@@ -442,14 +365,12 @@ function App() {
 
         const promptEvent = deferredPrompt;
         promptEvent.prompt();
-
         const { outcome } = await promptEvent.userChoice;
 
         if (outcome === 'accepted') {
             setShowInstallPrompt(false);
             setCanInstall(false);
         }
-
         setDeferredPrompt(null);
     };
 
@@ -515,7 +436,6 @@ function App() {
         }
 
         const roundedKm = Math.round(kmNum * 100) / 100;
-
         setTotalKmSinceLastFill(prev => prev + roundedKm);
 
         const manualTrip = {
@@ -528,10 +448,8 @@ function App() {
         };
 
         setTrips(prev => [...prev, manualTrip]);
-
         setManualKm('');
         setShowManualEntry(false);
-
         alert('✅ ' + roundedKm + ' km added!');
     };
 
@@ -547,7 +465,7 @@ function App() {
     const saveRideEntry = () => {
         const kmNum = parseFloat(rideKm);
         const earningsNum = parseFloat(rideEarnings);
-        const tipNum = parseFloat(rideTip) || 0; // NEW: Parse tip
+        const tipNum = parseFloat(rideTip) || 0;
 
         if (isNaN(kmNum) || !isFinite(kmNum) || kmNum <= 0) {
             alert('❌ Please enter valid kilometers!');
@@ -566,7 +484,7 @@ function App() {
 
         const roundedKm = Math.round(kmNum * 100) / 100;
         const roundedEarnings = Math.round(earningsNum * 100) / 100;
-        const roundedTip = Math.round(tipNum * 100) / 100; // NEW
+        const roundedTip = Math.round(tipNum * 100) / 100;
 
         const lastEntry = petrolEntries[0];
         let costPerKm = 0;
@@ -585,7 +503,7 @@ function App() {
             }
         }
 
-        const totalEarnings = roundedEarnings + roundedTip; // NEW: Total with tip
+        const totalEarnings = roundedEarnings + roundedTip;
         const profit = totalEarnings - fuelCost;
         const profitPerKm = roundedKm > 0 ? profit / roundedKm : 0;
 
@@ -594,8 +512,8 @@ function App() {
             date: new Date().toISOString(),
             km: roundedKm,
             earnings: roundedEarnings,
-            tip: roundedTip, // NEW
-            totalEarnings: totalEarnings, // NEW
+            tip: roundedTip,
+            totalEarnings: totalEarnings,
             fuelUsed: fuelUsed,
             fuelCost: fuelCost,
             profit: profit,
@@ -620,7 +538,7 @@ function App() {
 
         setRideKm('');
         setRideEarnings('');
-        setRideTip(''); // NEW: Clear tip
+        setRideTip('');
         setShowRideEntry(false);
 
         alert(`✅ Ride Saved!\n\n` +
@@ -639,19 +557,96 @@ function App() {
     const cancelRideEntry = () => {
         setRideKm('');
         setRideEarnings('');
-        setRideTip(''); // NEW
+        setRideTip('');
         setShowRideEntry(false);
     };
 
-    // NEW: Handle trip type selection dialog
+    // NEW: Fare Calculator Functions
+    const handleFareCalculatorRequest = () => {
+        setShowFareCalculator(true);
+        setCalculationResult(null);
+    };
+
+    const calculateFare = () => {
+        const km = parseFloat(calcKm);
+        const offerPrice = parseFloat(calcOffer);
+        const myPrice = parseFloat(calcMyPrice);
+
+        if (isNaN(km) || km <= 0) {
+            alert('❌ Enter valid kilometers!');
+            return;
+        }
+
+        if (isNaN(offerPrice) || offerPrice < 0) {
+            alert('❌ Enter valid offer price!');
+            return;
+        }
+
+        // Get fuel cost per km
+        const lastEntry = petrolEntries[0];
+        let costPerKm = 0;
+        let fuelUsed = 0;
+        let fuelCost = 0;
+
+        if (lastEntry) {
+            const mileage = lastEntry.mileage > 0 ? parseFloat(lastEntry.mileage) :
+                (lastEntry.litres > 0 && totalKmSinceLastFill > 0 ?
+                    totalKmSinceLastFill / lastEntry.litres : 0);
+
+            if (mileage > 0) {
+                fuelUsed = km / mileage;
+                fuelCost = fuelUsed * lastEntry.pricePerLitre;
+                costPerKm = lastEntry.pricePerLitre / mileage;
+            }
+        }
+
+        // Calculate for offer price
+        const offerProfit = offerPrice - fuelCost;
+        const offerProfitPerKm = km > 0 ? offerProfit / km : 0;
+
+        // Calculate for my price (if entered)
+        let myProfit = 0;
+        let myProfitPerKm = 0;
+        let priceDifference = 0;
+        let profitDifference = 0;
+
+        if (!isNaN(myPrice) && myPrice > 0) {
+            myProfit = myPrice - fuelCost;
+            myProfitPerKm = km > 0 ? myProfit / km : 0;
+            priceDifference = myPrice - offerPrice;
+            profitDifference = myProfit - offerProfit;
+        }
+
+        setCalculationResult({
+            km: km,
+            fuelUsed: fuelUsed,
+            fuelCost: fuelCost,
+            costPerKm: costPerKm,
+            offerPrice: offerPrice,
+            offerProfit: offerProfit,
+            offerProfitPerKm: offerProfitPerKm,
+            myPrice: myPrice,
+            myProfit: myProfit,
+            myProfitPerKm: myProfitPerKm,
+            priceDifference: priceDifference,
+            profitDifference: profitDifference
+        });
+    };
+
+    const closeFareCalculator = () => {
+        setShowFareCalculator(false);
+        setCalcKm('');
+        setCalcOffer('');
+        setCalcMyPrice('');
+        setCalculationResult(null);
+    };
+
     const handleStartTripRequest = () => {
         setShowTripTypeDialog(true);
     };
 
     const startTripWithType = (isRideTrip) => {
         setShowTripTypeDialog(false);
-
-        // Start GPS tracking immediately for both types
         startGPSTracking(isRideTrip);
     };
 
@@ -722,7 +717,6 @@ function App() {
             },
             (error) => {
                 if (error.code === 3) {
-                    console.log('High accuracy timeout, trying standard mode...');
                     navigator.geolocation.getCurrentPosition(
                         (position) => {
                             lastPositionRef.current = {
@@ -762,7 +756,6 @@ function App() {
         );
     };
 
-    // NEW: Stop trip and show completion dialog for rides
     const stopTrip = () => {
         if (watchIdRef.current) {
             navigator.geolocation.clearWatch(watchIdRef.current);
@@ -772,14 +765,12 @@ function App() {
         if (currentTrip) {
             const actualKm = currentTrip.distance;
 
-            // If it was a ride trip, show completion dialog
             if (currentTrip.isRide) {
                 setCompletedRideKm(actualKm);
                 setShowRideCompletionDialog(true);
                 setIsTracking(false);
                 setGpsDebug(prev => ({ ...prev, status: 'Stopped', speed: 0 }));
             } else {
-                // Personal trip - just save and close
                 const completedTrip = {
                     ...currentTrip,
                     endTime: new Date().toISOString(),
@@ -800,7 +791,6 @@ function App() {
         isFirstPositionAfterStart.current = true;
     };
 
-    // NEW: Complete ride with earnings
     const completeRideWithEarnings = () => {
         const earningsNum = parseFloat(rideEarnings);
         const tipNum = parseFloat(rideTip) || 0;
@@ -851,7 +841,6 @@ function App() {
 
         setRideEntries(prev => [rideEntry, ...prev]);
 
-        // Save trip
         const completedTrip = {
             ...currentTrip,
             endTime: new Date().toISOString(),
@@ -862,13 +851,11 @@ function App() {
         setTrips(prev => [...prev, completedTrip]);
         setCurrentTrip(null);
 
-        // Clear states
         setRideEarnings('');
         setRideTip('');
         setShowRideCompletionDialog(false);
         setCompletedRideKm(0);
 
-        // Show summary
         alert(`✅ Ride Completed!\n\n` +
             `Distance: ${actualKm.toFixed(2)} km\n` +
             `Base Fare: Rs. ${roundedEarnings}\n` +
@@ -883,7 +870,6 @@ function App() {
     };
 
     const cancelRideCompletion = () => {
-        // If user cancels, still save the trip but without earnings data
         const completedTrip = {
             ...currentTrip,
             endTime: new Date().toISOString(),
@@ -935,7 +921,7 @@ function App() {
         let totalRides = 0;
         let totalRideKm = 0;
         let totalEarnings = 0;
-        let totalTips = 0; // NEW
+        let totalTips = 0;
         let totalFuelCost = 0;
         let totalProfit = 0;
 
@@ -945,8 +931,8 @@ function App() {
                 rideDate.getFullYear() === currentYear) {
                 totalRides++;
                 totalRideKm += ride.km;
-                totalEarnings += ride.totalEarnings; // Already includes tip
-                totalTips += ride.tip || 0; // NEW
+                totalEarnings += ride.totalEarnings;
+                totalTips += ride.tip || 0;
                 totalFuelCost += ride.fuelCost;
                 totalProfit += ride.profit;
             }
@@ -959,7 +945,7 @@ function App() {
             totalRides,
             totalRideKm,
             totalEarnings,
-            totalTips, // NEW
+            totalTips,
             totalFuelCost,
             totalProfit,
             avgProfitPerRide,
@@ -967,12 +953,11 @@ function App() {
         };
     };
 
-    const SpeedometerComponent = useMemo(() => {
-        return ({ speed }) => {
+    const Speedometer = useMemo(() => {
+        return React.memo(({ speed }) => {
             const maxSpeed = 120;
             const clampedSpeed = Math.max(0, Math.min(speed, maxSpeed));
             const speedPercentage = (clampedSpeed / maxSpeed) * 100;
-
             const startAngle = 225;
             const rotation = startAngle + (speedPercentage / 100) * 270;
 
@@ -989,24 +974,13 @@ function App() {
                         </defs>
 
                         {Array.from({ length: 9 }, (_, i) => 15 + i * 8).map((r) => (
-                            <circle
-                                key={r}
-                                cx="150"
-                                cy="150"
-                                r={r}
-                                fill="none"
-                                stroke="rgba(66, 230, 207, 0.07)"
-                                strokeWidth="1.5"
-                            />
+                            <circle key={r} cx="150" cy="150" r={r} fill="none"
+                                stroke="rgba(66, 230, 207, 0.07)" strokeWidth="1.5" />
                         ))}
 
-                        <path
-                            d="M 72.22 227.78 A 110 110 0 1 1 227.78 227.78"
-                            fill="none"
-                            stroke="url(#speedGradient)"
-                            strokeWidth="14"
-                            strokeLinecap="round"
-                        />
+                        <path d="M 72.22 227.78 A 110 110 0 1 1 227.78 227.78"
+                            fill="none" stroke="url(#speedGradient)"
+                            strokeWidth="14" strokeLinecap="round" />
 
                         {[
                             { speed: 0, x: 55, y: 245, label: '0' },
@@ -1015,31 +989,17 @@ function App() {
                             { speed: 90, x: 270, y: 100, label: '90' },
                             { speed: 120, x: 245, y: 245, label: '120' }
                         ].map(({ speed, x, y, label }) => (
-                            <text
-                                key={speed}
-                                x={x}
-                                y={y}
-                                fill="#b5c0c9"
-                                fontSize="24"
-                                fontWeight="400"
-                                textAnchor="middle"
+                            <text key={speed} x={x} y={y} fill="#b5c0c9"
+                                fontSize="24" fontWeight="400" textAnchor="middle"
                                 dominantBaseline="middle"
-                                style={{ fontFamily: "'Caveat', 'Kalam', cursive" }}
-                            >
+                                style={{ fontFamily: "'Caveat', 'Kalam', cursive" }}>
                                 {label}
                             </text>
                         ))}
 
                         <g transform={`rotate(${rotation} 150 150)`}>
-                            <line
-                                x1="150"
-                                y1="170"
-                                x2="150"
-                                y2="65"
-                                stroke="#42e6cf"
-                                strokeWidth="3.5"
-                                strokeLinecap="round"
-                            />
+                            <line x1="150" y1="170" x2="150" y2="65"
+                                stroke="#42e6cf" strokeWidth="3.5" strokeLinecap="round" />
                             <circle cx="150" cy="150" r="10" fill="#42e6cf" />
                             <circle cx="150" cy="150" r="4" fill="#16213e" />
                         </g>
@@ -1051,12 +1011,10 @@ function App() {
                     </div>
                 </div>
             );
-        };
+        }, (prevProps, nextProps) => {
+            return Math.abs(prevProps.speed - nextProps.speed) < 0.5;
+        });
     }, []);
-
-    const Speedometer = React.memo(SpeedometerComponent, (prevProps, nextProps) => {
-        return Math.abs(prevProps.speed - nextProps.speed) < 0.5;
-    });
 
     const renderDashboard = () => {
         const monthly = getMonthlySummary();
@@ -1077,11 +1035,8 @@ function App() {
                         <button className="btn btn-success" onClick={handleInstallClick}>
                             ⬇️ Install
                         </button>
-                        <button
-                            className="btn btn-secondary"
-                            style={{ marginTop: '10px' }}
-                            onClick={() => setShowInstallPrompt(false)}
-                        >
+                        <button className="btn btn-secondary" style={{ marginTop: '10px' }}
+                            onClick={() => setShowInstallPrompt(false)}>
                             Later
                         </button>
                     </div>
@@ -1194,51 +1149,28 @@ function App() {
         return (
             <div className="card">
                 <h2>⛽ Add Petrol</h2>
-
                 <div className="input-group">
                     <label htmlFor="litres">Litres Filled</label>
-                    <input
-                        type="number"
-                        id="litres"
-                        placeholder="Enter litres"
-                        step="0.01"
-                        min="0"
-                        value={litres}
-                        onChange={(e) => setLitres(e.target.value)}
-                        inputMode="decimal"
-                    />
+                    <input type="number" id="litres" placeholder="Enter litres"
+                        step="0.01" min="0" value={litres}
+                        onChange={(e) => setLitres(e.target.value)} inputMode="decimal" />
                 </div>
-
                 <div className="input-group">
                     <label htmlFor="pricePerLitre">Price per Litre (Rs.)</label>
-                    <input
-                        type="number"
-                        id="pricePerLitre"
-                        placeholder="Enter price"
-                        step="0.01"
-                        min="0"
-                        value={pricePerLitre}
-                        onChange={(e) => setPricePerLitre(e.target.value)}
-                        inputMode="decimal"
-                    />
+                    <input type="number" id="pricePerLitre" placeholder="Enter price"
+                        step="0.01" min="0" value={pricePerLitre}
+                        onChange={(e) => setPricePerLitre(e.target.value)} inputMode="decimal" />
                 </div>
-
                 <div className="input-group">
                     <label htmlFor="fillDate">Date</label>
-                    <input
-                        type="date"
-                        id="fillDate"
-                        value={fillDate}
-                        onChange={(e) => setFillDate(e.target.value)}
-                    />
+                    <input type="date" id="fillDate" value={fillDate}
+                        onChange={(e) => setFillDate(e.target.value)} />
                 </div>
-
                 {totalKmSinceLastFill > 0 && (
                     <div className="alert">
                         📍 Distance: <strong>{totalKmSinceLastFill.toFixed(2)} km</strong>
                     </div>
                 )}
-
                 <button className="btn btn-success" onClick={savePetrolEntry}>
                     💾 Save Entry
                 </button>
@@ -1247,10 +1179,7 @@ function App() {
     };
 
     const renderGPSTracker = () => {
-        const currentTripKm = currentTrip && currentTrip.isActive
-            ? currentTrip.distance.toFixed(2)
-            : '0.00';
-
+        const currentTripKm = currentTrip && currentTrip.isActive ? currentTrip.distance.toFixed(2) : '0.00';
         const lastEntry = petrolEntries[0];
         const monthly = getMonthlySummary();
 
@@ -1324,7 +1253,6 @@ function App() {
                             <div className="trip-label-small">CURRENT TRIP</div>
                             <div className="trip-value-small">{currentTripKm} km</div>
                         </div>
-
                         <div className="trip-status-compact">
                             <div className="trip-label-small">TOTAL</div>
                             <div className="trip-value-small">{totalKmSinceLastFill.toFixed(2)} km</div>
@@ -1336,18 +1264,23 @@ function App() {
                             <button className="btn btn-success btn-lg" onClick={handleStartTripRequest}>
                                 ▶️ START GPS TRACKING
                             </button>
-                            <button
-                                className="btn btn-secondary btn-lg"
-                                style={{ marginTop: '10px' }}
-                                onClick={handleManualEntryRequest}
-                            >
+                            {/* NEW: Fare Calculator Button */}
+                            <button className="btn btn-primary btn-lg"
+                                style={{
+                                    marginTop: '10px',
+                                    background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+                                    color: 'white'
+                                }}
+                                onClick={handleFareCalculatorRequest}>
+                                🧮 FARE CALCULATOR
+                            </button>
+                            <button className="btn btn-secondary btn-lg" style={{ marginTop: '10px' }}
+                                onClick={handleManualEntryRequest}>
                                 ✏️ ADD MANUAL KM
                             </button>
-                            <button
-                                className="btn btn-primary btn-lg"
+                            <button className="btn btn-primary btn-lg"
                                 style={{ marginTop: '10px', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}
-                                onClick={handleRideEntryRequest}
-                            >
+                                onClick={handleRideEntryRequest}>
                                 🚖 ADD RIDE (WITHOUT GPS)
                             </button>
                         </>
@@ -1379,19 +1312,16 @@ function App() {
                                 <div className="cost-value">Rs. {tankCostIncurred.toFixed(1)}</div>
                                 <div className="cost-subtext">of Rs. {totalTankCost.toFixed(0)} filled</div>
                             </div>
-
                             <div className="cost-box">
                                 <div className="cost-label">TRIP COST</div>
                                 <div className="cost-value">Rs. {tripCostIncurred.toFixed(1)}</div>
                                 <div className="cost-subtext">{currentTripDistanceVal.toFixed(1)} km trip</div>
                             </div>
-
                             <div className="cost-box">
                                 <div className="cost-label">COST / KM</div>
                                 <div className="cost-value">Rs. {costPerKm.toFixed(2)}</div>
                                 <div className="cost-subtext">per km driven</div>
                             </div>
-
                             <div className="cost-box">
                                 <div className="cost-label">FUEL LEFT VALUE</div>
                                 <div className="cost-value" style={{ color: remainingFuelValue > 0 ? '#4ecca3' : '#ee6c4d' }}>
@@ -1406,90 +1336,72 @@ function App() {
         );
     };
 
-    const renderRideHistory = () => {
-        return (
-            <div className="card">
-                <h2>🚖 Ride History</h2>
-                {rideEntries.length === 0 ? (
-                    <div className="empty-state">
-                        <div className="empty-state-icon">🚗</div>
-                        <p>No ride entries yet</p>
-                        <p style={{ color: '#93dac4', fontSize: '13px', marginTop: '10px' }}>
-                            Add your first ride in the Track tab!
-                        </p>
-                    </div>
-                ) : (
-                    <div>
-                        {rideEntries.map(ride => {
-                            const date = new Date(ride.date);
-                            const formattedDate = date.toLocaleDateString('en-IN', {
-                                day: '2-digit',
-                                month: 'short',
-                                year: 'numeric'
-                            });
-                            const formattedTime = date.toLocaleTimeString('en-IN', {
-                                hour: '2-digit',
-                                minute: '2-digit'
-                            });
-
-                            return (
-                                <div key={ride.id} className="history-item" style={{
-                                    borderLeft: `4px solid ${ride.profit > 0 ? '#4ecca3' : '#ee6c4d'}`
-                                }}>
-                                    <div className="history-header">
-                                        <div className="history-date">{formattedDate} • {formattedTime}</div>
-                                        <div className="history-mileage" style={{
-                                            color: ride.profit > 0 ? '#4ecca3' : '#ee6c4d',
-                                            fontWeight: 'bold'
-                                        }}>
-                                            Rs. {ride.profit.toFixed(2)}
-                                        </div>
-                                    </div>
-                                    <div className="history-details">
-                                        <div className="history-detail">
-                                            Distance: <span>{ride.km.toFixed(1)} km</span>
-                                        </div>
-                                        <div className="history-detail">
-                                            Fare: <span style={{ color: '#4ecca3' }}>Rs. {ride.earnings.toFixed(0)}</span>
-                                        </div>
-                                        {ride.tip > 0 && (
-                                            <div className="history-detail">
-                                                Tip: <span style={{ color: '#f4a261' }}>Rs. {ride.tip.toFixed(0)} 🎁</span>
-                                            </div>
-                                        )}
-                                        <div className="history-detail">
-                                            Total: <span style={{ color: '#4ecca3' }}>Rs. {ride.totalEarnings.toFixed(0)}</span>
-                                        </div>
-                                        <div className="history-detail">
-                                            Fuel: <span>{ride.fuelUsed.toFixed(2)} L</span>
-                                        </div>
-                                        <div className="history-detail">
-                                            Cost: <span style={{ color: '#ee6c4d' }}>Rs. {ride.fuelCost.toFixed(2)}</span>
-                                        </div>
-                                    </div>
-                                    <div style={{
-                                        marginTop: '8px',
-                                        padding: '8px',
-                                        background: 'rgba(66, 230, 207, 0.1)',
-                                        borderRadius: '6px',
-                                        fontSize: '12px',
-                                        color: '#93dac4'
-                                    }}>
-                                        💰 Profit/km: Rs. {ride.profitPerKm.toFixed(2)} | Cost/km: Rs. {ride.costPerKm.toFixed(2)}
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                )}
-            </div>
-        );
-    };
-
     const renderHistory = () => {
         return (
             <div>
-                {renderRideHistory()}
+                <div className="card">
+                    <h2>🚖 Ride History</h2>
+                    {rideEntries.length === 0 ? (
+                        <div className="empty-state">
+                            <div className="empty-state-icon">🚗</div>
+                            <p>No ride entries yet</p>
+                        </div>
+                    ) : (
+                        <div>
+                            {rideEntries.map(ride => {
+                                const date = new Date(ride.date);
+                                const formattedDate = date.toLocaleDateString('en-IN', {
+                                    day: '2-digit', month: 'short', year: 'numeric'
+                                });
+                                const formattedTime = date.toLocaleTimeString('en-IN', {
+                                    hour: '2-digit', minute: '2-digit'
+                                });
+
+                                return (
+                                    <div key={ride.id} className="history-item"
+                                        style={{ borderLeft: `4px solid ${ride.profit > 0 ? '#4ecca3' : '#ee6c4d'}` }}>
+                                        <div className="history-header">
+                                            <div className="history-date">{formattedDate} • {formattedTime}</div>
+                                            <div className="history-mileage"
+                                                style={{ color: ride.profit > 0 ? '#4ecca3' : '#ee6c4d', fontWeight: 'bold' }}>
+                                                Rs. {ride.profit.toFixed(2)}
+                                            </div>
+                                        </div>
+                                        <div className="history-details">
+                                            <div className="history-detail">
+                                                Distance: <span>{ride.km.toFixed(1)} km</span>
+                                            </div>
+                                            <div className="history-detail">
+                                                Fare: <span style={{ color: '#4ecca3' }}>Rs. {ride.earnings.toFixed(0)}</span>
+                                            </div>
+                                            {ride.tip > 0 && (
+                                                <div className="history-detail">
+                                                    Tip: <span style={{ color: '#f4a261' }}>Rs. {ride.tip.toFixed(0)} 🎁</span>
+                                                </div>
+                                            )}
+                                            <div className="history-detail">
+                                                Total: <span style={{ color: '#4ecca3' }}>Rs. {ride.totalEarnings.toFixed(0)}</span>
+                                            </div>
+                                            <div className="history-detail">
+                                                Fuel: <span>{ride.fuelUsed.toFixed(2)} L</span>
+                                            </div>
+                                            <div className="history-detail">
+                                                Cost: <span style={{ color: '#ee6c4d' }}>Rs. {ride.fuelCost.toFixed(2)}</span>
+                                            </div>
+                                        </div>
+                                        <div style={{
+                                            marginTop: '8px', padding: '8px',
+                                            background: 'rgba(66, 230, 207, 0.1)',
+                                            borderRadius: '6px', fontSize: '12px', color: '#93dac4'
+                                        }}>
+                                            💰 Profit/km: Rs. {ride.profitPerKm.toFixed(2)} | Cost/km: Rs. {ride.costPerKm.toFixed(2)}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
 
                 <div className="card">
                     <h2>📜 Fuel History</h2>
@@ -1503,9 +1415,7 @@ function App() {
                             {petrolEntries.map(entry => {
                                 const date = new Date(entry.date);
                                 const formattedDate = date.toLocaleDateString('en-IN', {
-                                    day: '2-digit',
-                                    month: 'short',
-                                    year: 'numeric'
+                                    day: '2-digit', month: 'short', year: 'numeric'
                                 });
 
                                 return (
@@ -1539,7 +1449,189 @@ function App() {
 
     return (
         <div className="App">
-            {/* Trip Type Selection Dialog */}
+            {/* NEW: Fare Calculator Modal */}
+            {showFareCalculator && (
+                <div className="modal-overlay">
+                    <div className="modal" style={{ maxWidth: '450px' }}>
+                        <h2>🧮 Fare Calculator</h2>
+                        <p style={{ color: '#93dac4', fontSize: '14px', marginBottom: '15px' }}>
+                            Compare offers and negotiate better rates!
+                        </p>
+
+                        <div className="input-group">
+                            <label htmlFor="calcKm">Distance (km)</label>
+                            <input type="number" id="calcKm" placeholder="e.g., 20"
+                                step="0.1" min="0" value={calcKm}
+                                onChange={(e) => setCalcKm(e.target.value)}
+                                inputMode="decimal" autoFocus
+                                style={{ fontSize: '18px', padding: '15px', textAlign: 'center' }} />
+                        </div>
+
+                        <div className="input-group">
+                            <label htmlFor="calcOffer">Customer Offer (Rs.)</label>
+                            <input type="number" id="calcOffer" placeholder="e.g., 350"
+                                step="1" min="0" value={calcOffer}
+                                onChange={(e) => setCalcOffer(e.target.value)}
+                                inputMode="decimal"
+                                style={{ fontSize: '18px', padding: '15px', textAlign: 'center' }} />
+                        </div>
+
+                        <div className="input-group">
+                            <label htmlFor="calcMyPrice">Your Counter Offer (Rs.) - Optional</label>
+                            <input type="number" id="calcMyPrice" placeholder="e.g., 400"
+                                step="1" min="0" value={calcMyPrice}
+                                onChange={(e) => setCalcMyPrice(e.target.value)}
+                                inputMode="decimal"
+                                style={{ fontSize: '18px', padding: '15px', textAlign: 'center' }} />
+                        </div>
+
+                        {petrolEntries.length === 0 && (
+                            <div style={{
+                                background: 'rgba(238, 108, 77, 0.1)',
+                                border: '1px solid #ee6c4d',
+                                borderRadius: '8px',
+                                padding: '12px',
+                                marginTop: '15px',
+                                fontSize: '13px',
+                                color: '#f4a261'
+                            }}>
+                                ⚠️ Add fuel data first for accurate calculations
+                            </div>
+                        )}
+
+                        {calculationResult && (
+                            <div style={{
+                                background: 'linear-gradient(135deg, #1a4d6d 0%, #0f3460 100%)',
+                                border: '2px solid #4ecca3',
+                                borderRadius: '12px',
+                                padding: '15px',
+                                marginTop: '15px'
+                            }}>
+                                <div style={{ textAlign: 'center', color: '#4ecca3', fontSize: '14px', marginBottom: '12px', fontWeight: 'bold' }}>
+                                    📊 CALCULATION RESULT
+                                </div>
+
+                                {/* Fuel Cost */}
+                                <div style={{
+                                    background: 'rgba(238, 108, 77, 0.1)',
+                                    padding: '10px',
+                                    borderRadius: '8px',
+                                    marginBottom: '12px',
+                                    border: '1px solid #ee6c4d'
+                                }}>
+                                    <div style={{ fontSize: '12px', color: '#93dac4', marginBottom: '5px' }}>
+                                        ⛽ FUEL COST
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+                                        <span style={{ color: '#e8e8e8' }}>Cost/km:</span>
+                                        <span style={{ color: '#ee6c4d', fontWeight: 'bold' }}>Rs. {calculationResult.costPerKm.toFixed(2)}</span>
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+                                        <span style={{ color: '#e8e8e8' }}>Total Fuel:</span>
+                                        <span style={{ color: '#ee6c4d', fontWeight: 'bold' }}>Rs. {calculationResult.fuelCost.toFixed(2)}</span>
+                                    </div>
+                                </div>
+
+                                {/* Customer Offer */}
+                                <div style={{
+                                    background: 'rgba(78, 204, 163, 0.1)',
+                                    padding: '10px',
+                                    borderRadius: '8px',
+                                    marginBottom: '12px',
+                                    border: '1px solid #4ecca3'
+                                }}>
+                                    <div style={{ fontSize: '12px', color: '#93dac4', marginBottom: '5px' }}>
+                                        💵 CUSTOMER OFFER: Rs. {calculationResult.offerPrice}
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '15px', marginTop: '8px' }}>
+                                        <span style={{ color: '#e8e8e8' }}>Your Profit:</span>
+                                        <span style={{ color: calculationResult.offerProfit > 0 ? '#4ecca3' : '#ee6c4d', fontWeight: 'bold', fontSize: '18px' }}>
+                                            Rs. {calculationResult.offerProfit.toFixed(2)}
+                                        </span>
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginTop: '5px' }}>
+                                        <span style={{ color: '#93dac4' }}>Per km:</span>
+                                        <span style={{ color: calculationResult.offerProfitPerKm > 0 ? '#4ecca3' : '#ee6c4d', fontWeight: 'bold' }}>
+                                            Rs. {calculationResult.offerProfitPerKm.toFixed(2)}/km
+                                        </span>
+                                    </div>
+                                </div>
+
+                                {/* Your Counter Offer */}
+                                {calculationResult.myPrice > 0 && (
+                                    <div style={{
+                                        background: 'rgba(102, 126, 234, 0.15)',
+                                        padding: '10px',
+                                        borderRadius: '8px',
+                                        border: '2px solid #667eea'
+                                    }}>
+                                        <div style={{ fontSize: '12px', color: '#93dac4', marginBottom: '5px' }}>
+                                            🎯 YOUR COUNTER: Rs. {calculationResult.myPrice}
+                                        </div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '15px', marginTop: '8px' }}>
+                                            <span style={{ color: '#e8e8e8' }}>Your Profit:</span>
+                                            <span style={{ color: calculationResult.myProfit > 0 ? '#4ecca3' : '#ee6c4d', fontWeight: 'bold', fontSize: '18px' }}>
+                                                Rs. {calculationResult.myProfit.toFixed(2)}
+                                            </span>
+                                        </div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginTop: '5px' }}>
+                                            <span style={{ color: '#93dac4' }}>Per km:</span>
+                                            <span style={{ color: calculationResult.myProfitPerKm > 0 ? '#4ecca3' : '#ee6c4d', fontWeight: 'bold' }}>
+                                                Rs. {calculationResult.myProfitPerKm.toFixed(2)}/km
+                                            </span>
+                                        </div>
+
+                                        <div style={{
+                                            marginTop: '10px',
+                                            paddingTop: '10px',
+                                            borderTop: '1px solid rgba(102, 126, 234, 0.3)'
+                                        }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+                                                <span style={{ color: '#93dac4' }}>Extra Earning:</span>
+                                                <span style={{ color: calculationResult.priceDifference > 0 ? '#4ecca3' : '#ee6c4d', fontWeight: 'bold' }}>
+                                                    {calculationResult.priceDifference > 0 ? '+' : ''}Rs. {calculationResult.priceDifference.toFixed(2)}
+                                                </span>
+                                            </div>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginTop: '5px' }}>
+                                                <span style={{ color: '#93dac4' }}>Extra Profit:</span>
+                                                <span style={{ color: calculationResult.profitDifference > 0 ? '#4ecca3' : '#ee6c4d', fontWeight: 'bold' }}>
+                                                    {calculationResult.profitDifference > 0 ? '+' : ''}Rs. {calculationResult.profitDifference.toFixed(2)}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Recommendation */}
+                                <div style={{
+                                    marginTop: '12px',
+                                    padding: '10px',
+                                    background: calculationResult.offerProfitPerKm >= 10 ? 'rgba(78, 204, 163, 0.1)' : 'rgba(238, 108, 77, 0.1)',
+                                    border: `1px solid ${calculationResult.offerProfitPerKm >= 10 ? '#4ecca3' : '#ee6c4d'}`,
+                                    borderRadius: '8px',
+                                    textAlign: 'center',
+                                    fontSize: '13px',
+                                    color: calculationResult.offerProfitPerKm >= 10 ? '#4ecca3' : '#f4a261'
+                                }}>
+                                    {calculationResult.offerProfitPerKm >= 10
+                                        ? '✅ Good deal! Customer offer is profitable.'
+                                        : '⚠️ Low profit! Consider negotiating higher.'}
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="modal-buttons" style={{ marginTop: '15px' }}>
+                            <button className="btn btn-success" onClick={calculateFare}>
+                                🧮 Calculate
+                            </button>
+                            <button className="btn btn-secondary" onClick={closeFareCalculator}>
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {showTripTypeDialog && (
                 <div className="modal-overlay">
                     <div className="modal">
@@ -1547,22 +1639,16 @@ function App() {
                         <p style={{ color: '#93dac4', fontSize: '14px', marginBottom: '20px' }}>
                             Choose your trip type to start GPS tracking
                         </p>
-
                         <div className="modal-buttons">
-                            <button
-                                className="btn btn-primary"
+                            <button className="btn btn-primary"
                                 style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}
-                                onClick={() => startTripWithType(true)}
-                            >
+                                onClick={() => startTripWithType(true)}>
                                 🚖 Ride Trip
                                 <div style={{ fontSize: '12px', marginTop: '5px', opacity: 0.9 }}>
                                     Add earnings after completion
                                 </div>
                             </button>
-                            <button
-                                className="btn btn-success"
-                                onClick={() => startTripWithType(false)}
-                            >
+                            <button className="btn btn-success" onClick={() => startTripWithType(false)}>
                                 🏍️ Personal Trip
                             </button>
                             <button className="btn btn-secondary" onClick={cancelTripTypeSelection}>
@@ -1573,7 +1659,6 @@ function App() {
                 </div>
             )}
 
-            {/* NEW: Ride Completion Dialog */}
             {showRideCompletionDialog && (
                 <div className="modal-overlay">
                     <div className="modal">
@@ -1593,42 +1678,25 @@ function App() {
                                 {completedRideKm.toFixed(2)} km
                             </div>
                         </div>
-
                         <p style={{ color: '#93dac4', fontSize: '14px', marginBottom: '15px', textAlign: 'center' }}>
                             Enter your ride earnings
                         </p>
-
                         <div className="input-group">
                             <label htmlFor="rideEarnings">Base Fare (Rs.)</label>
-                            <input
-                                type="number"
-                                id="rideEarnings"
-                                placeholder="e.g., 300"
-                                step="1"
-                                min="0"
-                                value={rideEarnings}
+                            <input type="number" id="rideEarnings" placeholder="e.g., 300"
+                                step="1" min="0" value={rideEarnings}
                                 onChange={(e) => setRideEarnings(e.target.value)}
-                                inputMode="decimal"
-                                autoFocus
-                                style={{ fontSize: '18px', padding: '15px', textAlign: 'center' }}
-                            />
+                                inputMode="decimal" autoFocus
+                                style={{ fontSize: '18px', padding: '15px', textAlign: 'center' }} />
                         </div>
-
                         <div className="input-group">
                             <label htmlFor="rideTip">Tip (Optional) 🎁</label>
-                            <input
-                                type="number"
-                                id="rideTip"
-                                placeholder="e.g., 50"
-                                step="1"
-                                min="0"
-                                value={rideTip}
+                            <input type="number" id="rideTip" placeholder="e.g., 50"
+                                step="1" min="0" value={rideTip}
                                 onChange={(e) => setRideTip(e.target.value)}
                                 inputMode="decimal"
-                                style={{ fontSize: '18px', padding: '15px', textAlign: 'center' }}
-                            />
+                                style={{ fontSize: '18px', padding: '15px', textAlign: 'center' }} />
                         </div>
-
                         {petrolEntries.length === 0 && (
                             <div style={{
                                 background: 'rgba(238, 108, 77, 0.1)',
@@ -1642,7 +1710,6 @@ function App() {
                                 ⚠️ Add a fuel entry first for accurate profit calculation
                             </div>
                         )}
-
                         <div className="modal-buttons">
                             <button className="btn btn-success" onClick={completeRideWithEarnings}>
                                 ✅ Complete Ride
@@ -1655,7 +1722,6 @@ function App() {
                 </div>
             )}
 
-            {/* Manual Ride Entry (Without GPS) */}
             {showRideEntry && (
                 <div className="modal-overlay">
                     <div className="modal">
@@ -1663,53 +1729,30 @@ function App() {
                         <p style={{ color: '#93dac4', fontSize: '14px', marginBottom: '15px' }}>
                             Manual entry (without GPS tracking)
                         </p>
-
                         <div className="input-group">
                             <label htmlFor="rideKm">Distance (km)</label>
-                            <input
-                                type="number"
-                                id="rideKm"
-                                placeholder="e.g., 15"
-                                step="0.1"
-                                min="0"
-                                value={rideKm}
+                            <input type="number" id="rideKm" placeholder="e.g., 15"
+                                step="0.1" min="0" value={rideKm}
                                 onChange={(e) => setRideKm(e.target.value)}
-                                inputMode="decimal"
-                                autoFocus
-                                style={{ fontSize: '18px', padding: '15px', textAlign: 'center' }}
-                            />
+                                inputMode="decimal" autoFocus
+                                style={{ fontSize: '18px', padding: '15px', textAlign: 'center' }} />
                         </div>
-
                         <div className="input-group">
                             <label htmlFor="rideEarnings">Base Fare (Rs.)</label>
-                            <input
-                                type="number"
-                                id="rideEarnings"
-                                placeholder="e.g., 300"
-                                step="1"
-                                min="0"
-                                value={rideEarnings}
+                            <input type="number" id="rideEarnings" placeholder="e.g., 300"
+                                step="1" min="0" value={rideEarnings}
                                 onChange={(e) => setRideEarnings(e.target.value)}
                                 inputMode="decimal"
-                                style={{ fontSize: '18px', padding: '15px', textAlign: 'center' }}
-                            />
+                                style={{ fontSize: '18px', padding: '15px', textAlign: 'center' }} />
                         </div>
-
                         <div className="input-group">
                             <label htmlFor="rideTip">Tip (Optional) 🎁</label>
-                            <input
-                                type="number"
-                                id="rideTip"
-                                placeholder="e.g., 50"
-                                step="1"
-                                min="0"
-                                value={rideTip}
+                            <input type="number" id="rideTip" placeholder="e.g., 50"
+                                step="1" min="0" value={rideTip}
                                 onChange={(e) => setRideTip(e.target.value)}
                                 inputMode="decimal"
-                                style={{ fontSize: '18px', padding: '15px', textAlign: 'center' }}
-                            />
+                                style={{ fontSize: '18px', padding: '15px', textAlign: 'center' }} />
                         </div>
-
                         {petrolEntries.length === 0 && (
                             <div style={{
                                 background: 'rgba(238, 108, 77, 0.1)',
@@ -1723,7 +1766,6 @@ function App() {
                                 ⚠️ Add a fuel entry first for accurate profit calculation
                             </div>
                         )}
-
                         <div className="modal-buttons">
                             <button className="btn btn-success" onClick={saveRideEntry}>
                                 ✅ Calculate Profit
@@ -1743,23 +1785,14 @@ function App() {
                         <p style={{ color: '#93dac4', fontSize: '14px', marginBottom: '15px' }}>
                             Enter distance when someone else rode
                         </p>
-
                         <div className="input-group">
                             <label htmlFor="manualKm">Kilometers</label>
-                            <input
-                                type="number"
-                                id="manualKm"
-                                placeholder="Enter km"
-                                step="0.1"
-                                min="0"
-                                value={manualKm}
+                            <input type="number" id="manualKm" placeholder="Enter km"
+                                step="0.1" min="0" value={manualKm}
                                 onChange={(e) => setManualKm(e.target.value)}
-                                inputMode="decimal"
-                                autoFocus
-                                style={{ fontSize: '18px', padding: '15px', textAlign: 'center' }}
-                            />
+                                inputMode="decimal" autoFocus
+                                style={{ fontSize: '18px', padding: '15px', textAlign: 'center' }} />
                         </div>
-
                         <div className="modal-buttons">
                             <button className="btn btn-success" onClick={saveManualKm}>
                                 ✅ Add KM
@@ -1805,31 +1838,23 @@ function App() {
             </div>
 
             <div className="bottom-nav">
-                <button
-                    className={`nav-btn ${activeScreen === 'dashboard' ? 'active' : ''}`}
-                    onClick={() => setActiveScreen('dashboard')}
-                >
+                <button className={`nav-btn ${activeScreen === 'dashboard' ? 'active' : ''}`}
+                    onClick={() => setActiveScreen('dashboard')}>
                     <div className="nav-icon">🏠</div>
                     <div>Home</div>
                 </button>
-                <button
-                    className={`nav-btn ${activeScreen === 'petrol' ? 'active' : ''}`}
-                    onClick={() => setActiveScreen('petrol')}
-                >
+                <button className={`nav-btn ${activeScreen === 'petrol' ? 'active' : ''}`}
+                    onClick={() => setActiveScreen('petrol')}>
                     <div className="nav-icon">⛽</div>
                     <div>Fuel</div>
                 </button>
-                <button
-                    className={`nav-btn ${activeScreen === 'gps' ? 'active' : ''}`}
-                    onClick={() => setActiveScreen('gps')}
-                >
+                <button className={`nav-btn ${activeScreen === 'gps' ? 'active' : ''}`}
+                    onClick={() => setActiveScreen('gps')}>
                     <div className="nav-icon">📍</div>
                     <div>Track</div>
                 </button>
-                <button
-                    className={`nav-btn ${activeScreen === 'history' ? 'active' : ''}`}
-                    onClick={() => setActiveScreen('history')}
-                >
+                <button className={`nav-btn ${activeScreen === 'history' ? 'active' : ''}`}
+                    onClick={() => setActiveScreen('history')}>
                     <div className="nav-icon">📜</div>
                     <div>History</div>
                 </button>

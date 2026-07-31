@@ -1632,3 +1632,39 @@ input:focus-visible {
     .calc-tooltip:hover::after {
         opacity: 1;
     }
+/* Add this to your App.css if needed */
+.bottom-nav {
+    display: flex;
+    justify-content: space-around;
+    padding: 8px 0;
+}
+
+.nav-btn {
+    flex: 1;
+    max-width: 80px; /* Keeps icons from being too wide */
+}
+/* For 6 tabs - smaller icons */
+.bottom-nav {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 2px;
+}
+
+.nav-btn {
+    padding: 8px 5px;
+    font-size: 10px;
+}
+
+.nav-icon {
+    font-size: 20px;
+}
+
+@media (max-width: 360px) {
+    .nav-icon {
+        font-size: 18px;
+    }
+
+    .nav-btn {
+        font-size: 9px;
+    }
+}

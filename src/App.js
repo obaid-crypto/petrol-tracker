@@ -30,12 +30,10 @@ function App() {
     const [rideTip, setRideTip] = useState('');
     const [rideEntries, setRideEntries] = useState([]);
 
-    const [showTripTypeDialog, setShowTripTypeDialog] = useState(false);
     const [showRideCompletionDialog, setShowRideCompletionDialog] = useState(false);
     const [completedRideKm, setCompletedRideKm] = useState(0);
 
-    // NEW: Fare Calculator States
-    const [showFareCalculator, setShowFareCalculator] = useState(false);
+    // Fare Calculator States
     const [calcKm, setCalcKm] = useState('');
     const [calcOffer, setCalcOffer] = useState('');
     const [calcMyPrice, setCalcMyPrice] = useState('');
@@ -561,12 +559,6 @@ function App() {
         setShowRideEntry(false);
     };
 
-    // NEW: Fare Calculator Functions
-    const handleFareCalculatorRequest = () => {
-        setShowFareCalculator(true);
-        setCalculationResult(null);
-    };
-
     const calculateFare = () => {
         const km = parseFloat(calcKm);
         const offerPrice = parseFloat(calcOffer);
@@ -582,7 +574,6 @@ function App() {
             return;
         }
 
-        // Get fuel cost per km
         const lastEntry = petrolEntries[0];
         let costPerKm = 0;
         let fuelUsed = 0;
@@ -600,11 +591,9 @@ function App() {
             }
         }
 
-        // Calculate for offer price
         const offerProfit = offerPrice - fuelCost;
         const offerProfitPerKm = km > 0 ? offerProfit / km : 0;
 
-        // Calculate for my price (if entered)
         let myProfit = 0;
         let myProfitPerKm = 0;
         let priceDifference = 0;
@@ -633,25 +622,11 @@ function App() {
         });
     };
 
-    const closeFareCalculator = () => {
-        setShowFareCalculator(false);
+    const clearCalculator = () => {
         setCalcKm('');
         setCalcOffer('');
         setCalcMyPrice('');
         setCalculationResult(null);
-    };
-
-    const handleStartTripRequest = () => {
-        setShowTripTypeDialog(true);
-    };
-
-    const startTripWithType = (isRideTrip) => {
-        setShowTripTypeDialog(false);
-        startGPSTracking(isRideTrip);
-    };
-
-    const cancelTripTypeSelection = () => {
-        setShowTripTypeDialog(false);
     };
 
     const startGPSTracking = (isRideTrip = false) => {
@@ -1018,7 +993,6 @@ function App() {
 
     const renderDashboard = () => {
         const monthly = getMonthlySummary();
-        const rideSummary = getRideSummary();
         const lastEntry = petrolEntries[0];
         const currentMileage = lastEntry && totalKmSinceLastFill > 0
             ? (totalKmSinceLastFill / lastEntry.litres).toFixed(2)
@@ -1066,47 +1040,6 @@ function App() {
                         </div>
                     )}
                 </div>
-
-                {rideEntries.length > 0 && (
-                    <div className="card">
-                        <h2>🚖 Ride Earnings (This Month)</h2>
-                        <div className="stats-grid">
-                            <div className="stat-box">
-                                <div className="stat-label">Total Rides</div>
-                                <div className="stat-value" style={{ fontSize: '28px' }}>{rideSummary.totalRides}</div>
-                            </div>
-                            <div className="stat-box">
-                                <div className="stat-label">Distance</div>
-                                <div className="stat-value">{rideSummary.totalRideKm.toFixed(0)}<span className="stat-unit">km</span></div>
-                            </div>
-                            <div className="stat-box">
-                                <div className="stat-label">Earnings</div>
-                                <div className="stat-value" style={{ fontSize: '20px', color: '#4ecca3' }}>Rs. {rideSummary.totalEarnings.toFixed(0)}</div>
-                            </div>
-                            <div className="stat-box">
-                                <div className="stat-label">Tips 🎁</div>
-                                <div className="stat-value" style={{ fontSize: '20px', color: '#f4a261' }}>Rs. {rideSummary.totalTips.toFixed(0)}</div>
-                            </div>
-                            <div className="stat-box">
-                                <div className="stat-label">Fuel Cost</div>
-                                <div className="stat-value" style={{ fontSize: '20px', color: '#ee6c4d' }}>Rs. {rideSummary.totalFuelCost.toFixed(0)}</div>
-                            </div>
-                            <div className="stat-box">
-                                <div className="stat-label">Avg Profit/Ride</div>
-                                <div className="stat-value" style={{ fontSize: '20px', color: '#4ecca3' }}>Rs. {rideSummary.avgProfitPerRide.toFixed(0)}</div>
-                            </div>
-                            <div className="stat-box full-width" style={{ background: 'linear-gradient(135deg, #1a4d6d 0%, #2a5f7f 100%)' }}>
-                                <div className="stat-label">💰 NET PROFIT</div>
-                                <div className="stat-value large" style={{ color: rideSummary.totalProfit > 0 ? '#4ecca3' : '#ee6c4d' }}>
-                                    Rs. {rideSummary.totalProfit.toFixed(2)}
-                                </div>
-                                <div style={{ color: '#93dac4', fontSize: '12px', marginTop: '5px' }}>
-                                    Rs. {rideSummary.avgProfitPerKm.toFixed(2)}/km
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )}
 
                 <div className="card">
                     <h2>📊 This Month</h2>
@@ -1178,8 +1111,12 @@ function App() {
         );
     };
 
-    const renderGPSTracker = () => {
-        const currentTripKm = currentTrip && currentTrip.isActive ? currentTrip.distance.toFixed(2) : '0.00';
+    // NEW: Personal Trip Tab
+    const renderPersonalTrip = () => {
+        const currentTripKm = currentTrip && currentTrip.isActive && !currentTrip.isRide
+            ? currentTrip.distance.toFixed(2)
+            : '0.00';
+
         const lastEntry = petrolEntries[0];
         const monthly = getMonthlySummary();
 
@@ -1200,21 +1137,23 @@ function App() {
         }
 
         const tankCostIncurred = costPerKm * totalKmSinceLastFill;
-        const currentTripDistanceVal = currentTrip && currentTrip.isActive ? currentTrip.distance : 0;
+        const currentTripDistanceVal = currentTrip && currentTrip.isActive && !currentTrip.isRide ? currentTrip.distance : 0;
         const tripCostIncurred = costPerKm * currentTripDistanceVal;
         const totalTankCost = lastEntry ? lastEntry.totalCost : 0;
         const remainingFuelValue = Math.max(0, totalTankCost - tankCostIncurred);
 
+        const isPersonalTripActive = isTracking && currentTrip && !currentTrip.isRide;
+
         return (
             <div>
                 <div className="card">
-                    <h2>📍 GPS Tracker</h2>
+                    <h2>🏍️ Personal Trip</h2>
 
-                    {isTracking && <Speedometer speed={smoothSpeed} />}
+                    {isPersonalTripActive && <Speedometer speed={smoothSpeed} />}
 
-                    {isTracking && currentTrip && (
+                    {isPersonalTripActive && (
                         <div style={{
-                            background: currentTrip.isRide ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : 'linear-gradient(135deg, #4ecca3 0%, #3baf84 100%)',
+                            background: 'linear-gradient(135deg, #4ecca3 0%, #3baf84 100%)',
                             padding: '10px 15px',
                             borderRadius: '8px',
                             textAlign: 'center',
@@ -1223,22 +1162,22 @@ function App() {
                             fontWeight: 'bold',
                             fontSize: '14px'
                         }}>
-                            {currentTrip.isRide ? '🚖 RIDE IN PROGRESS' : '🏍️ PERSONAL TRIP'}
+                            🏍️ PERSONAL TRIP IN PROGRESS
                         </div>
                     )}
 
                     <div style={{
-                        background: isTracking ? 'linear-gradient(135deg, #1a4d6d 0%, #0f3460 100%)' : '#0f3460',
+                        background: isPersonalTripActive ? 'linear-gradient(135deg, #1a4d6d 0%, #0f3460 100%)' : '#0f3460',
                         padding: '12px',
                         borderRadius: '10px',
                         marginBottom: '15px',
-                        border: `2px solid ${isTracking ? '#4ecca3' : '#1a4d6d'}`,
+                        border: `2px solid ${isPersonalTripActive ? '#4ecca3' : '#1a4d6d'}`,
                         fontSize: '12px'
                     }}>
                         <div style={{ color: '#4ecca3', fontWeight: 'bold', marginBottom: '6px', fontSize: '13px' }}>
                             📡 {gpsDebug.status}
                         </div>
-                        {isTracking && (
+                        {isPersonalTripActive && (
                             <div style={{ color: '#e8e8e8', fontFamily: 'monospace', fontSize: '11px', lineHeight: '1.5' }}>
                                 Updates: <span style={{ color: '#4ecca3' }}>{gpsDebug.updates}</span> |
                                 Accuracy: <span style={{ color: gpsDebug.accuracy < 20 ? '#4ecca3' : '#f4a261' }}>
@@ -1249,7 +1188,7 @@ function App() {
                     </div>
 
                     <div className="trip-status-grid">
-                        <div className={`trip-status-compact ${isTracking ? 'tracking' : ''}`}>
+                        <div className={`trip-status-compact ${isPersonalTripActive ? 'tracking' : ''}`}>
                             <div className="trip-label-small">CURRENT TRIP</div>
                             <div className="trip-value-small">{currentTripKm} km</div>
                         </div>
@@ -1259,34 +1198,19 @@ function App() {
                         </div>
                     </div>
 
-                    {!isTracking ? (
+                    {!isPersonalTripActive ? (
                         <>
-                            <button className="btn btn-success btn-lg" onClick={handleStartTripRequest}>
-                                ▶️ START GPS TRACKING
-                            </button>
-                            {/* NEW: Fare Calculator Button */}
-                            <button className="btn btn-primary btn-lg"
-                                style={{
-                                    marginTop: '10px',
-                                    background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
-                                    color: 'white'
-                                }}
-                                onClick={handleFareCalculatorRequest}>
-                                🧮 FARE CALCULATOR
+                            <button className="btn btn-success btn-lg" onClick={() => startGPSTracking(false)}>
+                                ▶️ START PERSONAL TRIP
                             </button>
                             <button className="btn btn-secondary btn-lg" style={{ marginTop: '10px' }}
                                 onClick={handleManualEntryRequest}>
                                 ✏️ ADD MANUAL KM
                             </button>
-                            <button className="btn btn-primary btn-lg"
-                                style={{ marginTop: '10px', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}
-                                onClick={handleRideEntryRequest}>
-                                🚖 ADD RIDE (WITHOUT GPS)
-                            </button>
                         </>
                     ) : (
                         <button className="btn btn-danger btn-lg" onClick={stopTrip}>
-                            ⏹️ COMPLETE TRIP
+                            ⏹️ STOP TRIP
                         </button>
                     )}
 
@@ -1302,7 +1226,7 @@ function App() {
                     {petrolEntries.length === 0 ? (
                         <div className="empty-state-compact">
                             <p style={{ color: '#93dac4', fontSize: '13px', margin: 0 }}>
-                                💡 Add a petrol fill entry in the <strong>Fuel</strong> tab to enable live rupee cost tracking!
+                                💡 Add a petrol fill entry in the <strong>Fuel</strong> tab!
                             </p>
                         </div>
                     ) : (
@@ -1336,11 +1260,144 @@ function App() {
         );
     };
 
-    const renderHistory = () => {
+    // NEW: Ride Trip Tab
+    const renderRideTrip = () => {
+        const rideSummary = getRideSummary();
+        const currentRideTripKm = currentTrip && currentTrip.isActive && currentTrip.isRide
+            ? currentTrip.distance.toFixed(2)
+            : '0.00';
+
+        const isRideTripActive = isTracking && currentTrip && currentTrip.isRide;
+
         return (
             <div>
                 <div className="card">
-                    <h2>🚖 Ride History</h2>
+                    <h2>🚖 Ride Trip</h2>
+
+                    {isRideTripActive && <Speedometer speed={smoothSpeed} />}
+
+                    {isRideTripActive && (
+                        <div style={{
+                            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                            padding: '10px 15px',
+                            borderRadius: '8px',
+                            textAlign: 'center',
+                            marginBottom: '15px',
+                            color: 'white',
+                            fontWeight: 'bold',
+                            fontSize: '14px'
+                        }}>
+                            🚖 RIDE TRIP IN PROGRESS
+                        </div>
+                    )}
+
+                    <div style={{
+                        background: isRideTripActive ? 'linear-gradient(135deg, #1a4d6d 0%, #0f3460 100%)' : '#0f3460',
+                        padding: '12px',
+                        borderRadius: '10px',
+                        marginBottom: '15px',
+                        border: `2px solid ${isRideTripActive ? '#4ecca3' : '#1a4d6d'}`,
+                        fontSize: '12px'
+                    }}>
+                        <div style={{ color: '#4ecca3', fontWeight: 'bold', marginBottom: '6px', fontSize: '13px' }}>
+                            📡 {gpsDebug.status}
+                        </div>
+                        {isRideTripActive && (
+                            <div style={{ color: '#e8e8e8', fontFamily: 'monospace', fontSize: '11px', lineHeight: '1.5' }}>
+                                Updates: <span style={{ color: '#4ecca3' }}>{gpsDebug.updates}</span> |
+                                Accuracy: <span style={{ color: gpsDebug.accuracy < 20 ? '#4ecca3' : '#f4a261' }}>
+                                    {gpsDebug.accuracy.toFixed(0)}m
+                                </span>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="trip-status-grid">
+                        <div className={`trip-status-compact ${isRideTripActive ? 'tracking' : ''}`}>
+                            <div className="trip-label-small">CURRENT RIDE</div>
+                            <div className="trip-value-small">{currentRideTripKm} km</div>
+                        </div>
+                        <div className="trip-status-compact">
+                            <div className="trip-label-small">TOTAL</div>
+                            <div className="trip-value-small">{totalKmSinceLastFill.toFixed(2)} km</div>
+                        </div>
+                    </div>
+
+                    {!isRideTripActive ? (
+                        <>
+                            <button className="btn btn-primary btn-lg"
+                                style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}
+                                onClick={() => startGPSTracking(true)}>
+                                ▶️ START RIDE TRIP
+                            </button>
+                            <button className="btn btn-secondary btn-lg" style={{ marginTop: '10px' }}
+                                onClick={handleRideEntryRequest}>
+                                ✏️ ADD RIDE MANUALLY
+                            </button>
+                        </>
+                    ) : (
+                        <button className="btn btn-danger btn-lg" onClick={stopTrip}>
+                            ⏹️ COMPLETE RIDE
+                        </button>
+                    )}
+
+                    {showGpsAlert && (
+                        <div className="alert alert-warning" style={{ marginTop: '15px' }}>
+                            {gpsMessage}
+                        </div>
+                    )}
+                </div>
+
+                {/* Monthly Earnings Summary */}
+                <div className="card">
+                    <h2>💰 Monthly Earnings</h2>
+                    {rideEntries.length === 0 ? (
+                        <div className="empty-state">
+                            <div className="empty-state-icon">🚖</div>
+                            <p>No rides yet this month</p>
+                        </div>
+                    ) : (
+                        <div className="stats-grid">
+                            <div className="stat-box">
+                                <div className="stat-label">Total Rides</div>
+                                <div className="stat-value" style={{ fontSize: '28px' }}>{rideSummary.totalRides}</div>
+                            </div>
+                            <div className="stat-box">
+                                <div className="stat-label">Distance</div>
+                                <div className="stat-value">{rideSummary.totalRideKm.toFixed(0)}<span className="stat-unit">km</span></div>
+                            </div>
+                            <div className="stat-box">
+                                <div className="stat-label">Earnings</div>
+                                <div className="stat-value" style={{ fontSize: '20px', color: '#4ecca3' }}>Rs. {rideSummary.totalEarnings.toFixed(0)}</div>
+                            </div>
+                            <div className="stat-box">
+                                <div className="stat-label">Tips 🎁</div>
+                                <div className="stat-value" style={{ fontSize: '20px', color: '#f4a261' }}>Rs. {rideSummary.totalTips.toFixed(0)}</div>
+                            </div>
+                            <div className="stat-box">
+                                <div className="stat-label">Fuel Cost</div>
+                                <div className="stat-value" style={{ fontSize: '20px', color: '#ee6c4d' }}>Rs. {rideSummary.totalFuelCost.toFixed(0)}</div>
+                            </div>
+                            <div className="stat-box">
+                                <div className="stat-label">Avg Profit/Ride</div>
+                                <div className="stat-value" style={{ fontSize: '20px', color: '#4ecca3' }}>Rs. {rideSummary.avgProfitPerRide.toFixed(0)}</div>
+                            </div>
+                            <div className="stat-box full-width" style={{ background: 'linear-gradient(135deg, #1a4d6d 0%, #2a5f7f 100%)' }}>
+                                <div className="stat-label">💰 NET PROFIT</div>
+                                <div className="stat-value large" style={{ color: rideSummary.totalProfit > 0 ? '#4ecca3' : '#ee6c4d' }}>
+                                    Rs. {rideSummary.totalProfit.toFixed(2)}
+                                </div>
+                                <div style={{ color: '#93dac4', fontSize: '12px', marginTop: '5px' }}>
+                                    Rs. {rideSummary.avgProfitPerKm.toFixed(2)}/km
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                {/* Ride History */}
+                <div className="card">
+                    <h2>📜 Ride History</h2>
                     {rideEntries.length === 0 ? (
                         <div className="empty-state">
                             <div className="empty-state-icon">🚗</div>
@@ -1348,7 +1405,7 @@ function App() {
                         </div>
                     ) : (
                         <div>
-                            {rideEntries.map(ride => {
+                            {rideEntries.slice(0, 10).map(ride => {
                                 const date = new Date(ride.date);
                                 const formattedDate = date.toLocaleDateString('en-IN', {
                                     day: '2-digit', month: 'short', year: 'numeric'
@@ -1402,7 +1459,195 @@ function App() {
                         </div>
                     )}
                 </div>
+            </div>
+        );
+    };
 
+    const renderCalculator = () => {
+        return (
+            <div>
+                <div className="card">
+                    <h2>🧮 Fare Calculator</h2>
+                    <p style={{ color: '#93dac4', fontSize: '14px', marginBottom: '15px' }}>
+                        Compare offers and negotiate better rates!
+                    </p>
+
+                    <div className="input-group">
+                        <label htmlFor="calcKm">Distance (km)</label>
+                        <input type="number" id="calcKm" placeholder="e.g., 20"
+                            step="0.1" min="0" value={calcKm}
+                            onChange={(e) => setCalcKm(e.target.value)}
+                            inputMode="decimal"
+                            style={{ fontSize: '16px', padding: '12px' }} />
+                    </div>
+
+                    <div className="input-group">
+                        <label htmlFor="calcOffer">Customer Offer (Rs.)</label>
+                        <input type="number" id="calcOffer" placeholder="e.g., 350"
+                            step="1" min="0" value={calcOffer}
+                            onChange={(e) => setCalcOffer(e.target.value)}
+                            inputMode="decimal"
+                            style={{ fontSize: '16px', padding: '12px' }} />
+                    </div>
+
+                    <div className="input-group">
+                        <label htmlFor="calcMyPrice">Your Counter Offer (Rs.) - Optional</label>
+                        <input type="number" id="calcMyPrice" placeholder="e.g., 400"
+                            step="1" min="0" value={calcMyPrice}
+                            onChange={(e) => setCalcMyPrice(e.target.value)}
+                            inputMode="decimal"
+                            style={{ fontSize: '16px', padding: '12px' }} />
+                    </div>
+
+                    {petrolEntries.length === 0 && (
+                        <div style={{
+                            background: 'rgba(238, 108, 77, 0.1)',
+                            border: '1px solid #ee6c4d',
+                            borderRadius: '8px',
+                            padding: '12px',
+                            marginBottom: '15px',
+                            fontSize: '13px',
+                            color: '#f4a261'
+                        }}>
+                            ⚠️ Add fuel data first for accurate calculations
+                        </div>
+                    )}
+
+                    <div style={{ display: 'flex', gap: '10px' }}>
+                        <button className="btn btn-success" onClick={calculateFare} style={{ flex: 1 }}>
+                            🧮 Calculate
+                        </button>
+                        <button className="btn btn-secondary" onClick={clearCalculator} style={{ flex: 1 }}>
+                            🔄 Clear
+                        </button>
+                    </div>
+                </div>
+
+                {calculationResult && (
+                    <div className="card" style={{
+                        background: 'linear-gradient(135deg, #1a4d6d 0%, #0f3460 100%)',
+                        border: '2px solid #4ecca3'
+                    }}>
+                        <div style={{ textAlign: 'center', color: '#4ecca3', fontSize: '16px', marginBottom: '15px', fontWeight: 'bold' }}>
+                            📊 CALCULATION RESULT
+                        </div>
+
+                        {/* Fuel Cost */}
+                        <div style={{
+                            background: 'rgba(238, 108, 77, 0.1)',
+                            padding: '12px',
+                            borderRadius: '8px',
+                            marginBottom: '12px',
+                            border: '1px solid #ee6c4d'
+                        }}>
+                            <div style={{ fontSize: '12px', color: '#93dac4', marginBottom: '8px', fontWeight: 'bold' }}>
+                                ⛽ FUEL COST
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', marginBottom: '5px' }}>
+                                <span style={{ color: '#e8e8e8' }}>Cost/km:</span>
+                                <span style={{ color: '#ee6c4d', fontWeight: 'bold' }}>Rs. {calculationResult.costPerKm.toFixed(2)}</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px' }}>
+                                <span style={{ color: '#e8e8e8' }}>Total Fuel Cost:</span>
+                                <span style={{ color: '#ee6c4d', fontWeight: 'bold' }}>Rs. {calculationResult.fuelCost.toFixed(2)}</span>
+                            </div>
+                        </div>
+
+                        {/* Customer Offer */}
+                        <div style={{
+                            background: 'rgba(78, 204, 163, 0.1)',
+                            padding: '12px',
+                            borderRadius: '8px',
+                            marginBottom: '12px',
+                            border: '1px solid #4ecca3'
+                        }}>
+                            <div style={{ fontSize: '12px', color: '#93dac4', marginBottom: '8px', fontWeight: 'bold' }}>
+                                💵 CUSTOMER OFFER: Rs. {calculationResult.offerPrice}
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '16px', marginTop: '10px' }}>
+                                <span style={{ color: '#e8e8e8' }}>Your Profit:</span>
+                                <span style={{ color: calculationResult.offerProfit > 0 ? '#4ecca3' : '#ee6c4d', fontWeight: 'bold', fontSize: '20px' }}>
+                                    Rs. {calculationResult.offerProfit.toFixed(2)}
+                                </span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', marginTop: '8px' }}>
+                                <span style={{ color: '#93dac4' }}>Per km:</span>
+                                <span style={{ color: calculationResult.offerProfitPerKm > 0 ? '#4ecca3' : '#ee6c4d', fontWeight: 'bold' }}>
+                                    Rs. {calculationResult.offerProfitPerKm.toFixed(2)}/km
+                                </span>
+                            </div>
+                        </div>
+
+                        {/* Your Counter Offer */}
+                        {calculationResult.myPrice > 0 && (
+                            <div style={{
+                                background: 'rgba(102, 126, 234, 0.15)',
+                                padding: '12px',
+                                borderRadius: '8px',
+                                border: '2px solid #667eea',
+                                marginBottom: '12px'
+                            }}>
+                                <div style={{ fontSize: '12px', color: '#93dac4', marginBottom: '8px', fontWeight: 'bold' }}>
+                                    🎯 YOUR COUNTER: Rs. {calculationResult.myPrice}
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '16px', marginTop: '10px' }}>
+                                    <span style={{ color: '#e8e8e8' }}>Your Profit:</span>
+                                    <span style={{ color: calculationResult.myProfit > 0 ? '#4ecca3' : '#ee6c4d', fontWeight: 'bold', fontSize: '20px' }}>
+                                        Rs. {calculationResult.myProfit.toFixed(2)}
+                                    </span>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', marginTop: '8px' }}>
+                                    <span style={{ color: '#93dac4' }}>Per km:</span>
+                                    <span style={{ color: calculationResult.myProfitPerKm > 0 ? '#4ecca3' : '#ee6c4d', fontWeight: 'bold' }}>
+                                        Rs. {calculationResult.myProfitPerKm.toFixed(2)}/km
+                                    </span>
+                                </div>
+
+                                <div style={{
+                                    marginTop: '12px',
+                                    paddingTop: '12px',
+                                    borderTop: '1px solid rgba(102, 126, 234, 0.3)'
+                                }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', marginBottom: '5px' }}>
+                                        <span style={{ color: '#93dac4' }}>Extra Earning:</span>
+                                        <span style={{ color: calculationResult.priceDifference > 0 ? '#4ecca3' : '#ee6c4d', fontWeight: 'bold' }}>
+                                            {calculationResult.priceDifference > 0 ? '+' : ''}Rs. {calculationResult.priceDifference.toFixed(2)}
+                                        </span>
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px' }}>
+                                        <span style={{ color: '#93dac4' }}>Extra Profit:</span>
+                                        <span style={{ color: calculationResult.profitDifference > 0 ? '#4ecca3' : '#ee6c4d', fontWeight: 'bold' }}>
+                                            {calculationResult.profitDifference > 0 ? '+' : ''}Rs. {calculationResult.profitDifference.toFixed(2)}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Recommendation */}
+                        <div style={{
+                            padding: '12px',
+                            background: calculationResult.offerProfitPerKm >= 10 ? 'rgba(78, 204, 163, 0.1)' : 'rgba(238, 108, 77, 0.1)',
+                            border: `1px solid ${calculationResult.offerProfitPerKm >= 10 ? '#4ecca3' : '#ee6c4d'}`,
+                            borderRadius: '8px',
+                            textAlign: 'center',
+                            fontSize: '14px',
+                            fontWeight: 'bold',
+                            color: calculationResult.offerProfitPerKm >= 10 ? '#4ecca3' : '#f4a261'
+                        }}>
+                            {calculationResult.offerProfitPerKm >= 10
+                                ? '✅ Good deal! Customer offer is profitable.'
+                                : '⚠️ Low profit! Consider negotiating higher.'}
+                        </div>
+                    </div>
+                )}
+            </div>
+        );
+    };
+
+    const renderHistory = () => {
+        return (
+            <div>
                 <div className="card">
                     <h2>📜 Fuel History</h2>
                     {petrolEntries.length === 0 ? (
@@ -1449,216 +1694,6 @@ function App() {
 
     return (
         <div className="App">
-            {/* NEW: Fare Calculator Modal */}
-            {showFareCalculator && (
-                <div className="modal-overlay">
-                    <div className="modal" style={{ maxWidth: '450px' }}>
-                        <h2>🧮 Fare Calculator</h2>
-                        <p style={{ color: '#93dac4', fontSize: '14px', marginBottom: '15px' }}>
-                            Compare offers and negotiate better rates!
-                        </p>
-
-                        <div className="input-group">
-                            <label htmlFor="calcKm">Distance (km)</label>
-                            <input type="number" id="calcKm" placeholder="e.g., 20"
-                                step="0.1" min="0" value={calcKm}
-                                onChange={(e) => setCalcKm(e.target.value)}
-                                inputMode="decimal" autoFocus
-                                style={{ fontSize: '18px', padding: '15px', textAlign: 'center' }} />
-                        </div>
-
-                        <div className="input-group">
-                            <label htmlFor="calcOffer">Customer Offer (Rs.)</label>
-                            <input type="number" id="calcOffer" placeholder="e.g., 350"
-                                step="1" min="0" value={calcOffer}
-                                onChange={(e) => setCalcOffer(e.target.value)}
-                                inputMode="decimal"
-                                style={{ fontSize: '18px', padding: '15px', textAlign: 'center' }} />
-                        </div>
-
-                        <div className="input-group">
-                            <label htmlFor="calcMyPrice">Your Counter Offer (Rs.) - Optional</label>
-                            <input type="number" id="calcMyPrice" placeholder="e.g., 400"
-                                step="1" min="0" value={calcMyPrice}
-                                onChange={(e) => setCalcMyPrice(e.target.value)}
-                                inputMode="decimal"
-                                style={{ fontSize: '18px', padding: '15px', textAlign: 'center' }} />
-                        </div>
-
-                        {petrolEntries.length === 0 && (
-                            <div style={{
-                                background: 'rgba(238, 108, 77, 0.1)',
-                                border: '1px solid #ee6c4d',
-                                borderRadius: '8px',
-                                padding: '12px',
-                                marginTop: '15px',
-                                fontSize: '13px',
-                                color: '#f4a261'
-                            }}>
-                                ⚠️ Add fuel data first for accurate calculations
-                            </div>
-                        )}
-
-                        {calculationResult && (
-                            <div style={{
-                                background: 'linear-gradient(135deg, #1a4d6d 0%, #0f3460 100%)',
-                                border: '2px solid #4ecca3',
-                                borderRadius: '12px',
-                                padding: '15px',
-                                marginTop: '15px'
-                            }}>
-                                <div style={{ textAlign: 'center', color: '#4ecca3', fontSize: '14px', marginBottom: '12px', fontWeight: 'bold' }}>
-                                    📊 CALCULATION RESULT
-                                </div>
-
-                                {/* Fuel Cost */}
-                                <div style={{
-                                    background: 'rgba(238, 108, 77, 0.1)',
-                                    padding: '10px',
-                                    borderRadius: '8px',
-                                    marginBottom: '12px',
-                                    border: '1px solid #ee6c4d'
-                                }}>
-                                    <div style={{ fontSize: '12px', color: '#93dac4', marginBottom: '5px' }}>
-                                        ⛽ FUEL COST
-                                    </div>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-                                        <span style={{ color: '#e8e8e8' }}>Cost/km:</span>
-                                        <span style={{ color: '#ee6c4d', fontWeight: 'bold' }}>Rs. {calculationResult.costPerKm.toFixed(2)}</span>
-                                    </div>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-                                        <span style={{ color: '#e8e8e8' }}>Total Fuel:</span>
-                                        <span style={{ color: '#ee6c4d', fontWeight: 'bold' }}>Rs. {calculationResult.fuelCost.toFixed(2)}</span>
-                                    </div>
-                                </div>
-
-                                {/* Customer Offer */}
-                                <div style={{
-                                    background: 'rgba(78, 204, 163, 0.1)',
-                                    padding: '10px',
-                                    borderRadius: '8px',
-                                    marginBottom: '12px',
-                                    border: '1px solid #4ecca3'
-                                }}>
-                                    <div style={{ fontSize: '12px', color: '#93dac4', marginBottom: '5px' }}>
-                                        💵 CUSTOMER OFFER: Rs. {calculationResult.offerPrice}
-                                    </div>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '15px', marginTop: '8px' }}>
-                                        <span style={{ color: '#e8e8e8' }}>Your Profit:</span>
-                                        <span style={{ color: calculationResult.offerProfit > 0 ? '#4ecca3' : '#ee6c4d', fontWeight: 'bold', fontSize: '18px' }}>
-                                            Rs. {calculationResult.offerProfit.toFixed(2)}
-                                        </span>
-                                    </div>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginTop: '5px' }}>
-                                        <span style={{ color: '#93dac4' }}>Per km:</span>
-                                        <span style={{ color: calculationResult.offerProfitPerKm > 0 ? '#4ecca3' : '#ee6c4d', fontWeight: 'bold' }}>
-                                            Rs. {calculationResult.offerProfitPerKm.toFixed(2)}/km
-                                        </span>
-                                    </div>
-                                </div>
-
-                                {/* Your Counter Offer */}
-                                {calculationResult.myPrice > 0 && (
-                                    <div style={{
-                                        background: 'rgba(102, 126, 234, 0.15)',
-                                        padding: '10px',
-                                        borderRadius: '8px',
-                                        border: '2px solid #667eea'
-                                    }}>
-                                        <div style={{ fontSize: '12px', color: '#93dac4', marginBottom: '5px' }}>
-                                            🎯 YOUR COUNTER: Rs. {calculationResult.myPrice}
-                                        </div>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '15px', marginTop: '8px' }}>
-                                            <span style={{ color: '#e8e8e8' }}>Your Profit:</span>
-                                            <span style={{ color: calculationResult.myProfit > 0 ? '#4ecca3' : '#ee6c4d', fontWeight: 'bold', fontSize: '18px' }}>
-                                                Rs. {calculationResult.myProfit.toFixed(2)}
-                                            </span>
-                                        </div>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginTop: '5px' }}>
-                                            <span style={{ color: '#93dac4' }}>Per km:</span>
-                                            <span style={{ color: calculationResult.myProfitPerKm > 0 ? '#4ecca3' : '#ee6c4d', fontWeight: 'bold' }}>
-                                                Rs. {calculationResult.myProfitPerKm.toFixed(2)}/km
-                                            </span>
-                                        </div>
-
-                                        <div style={{
-                                            marginTop: '10px',
-                                            paddingTop: '10px',
-                                            borderTop: '1px solid rgba(102, 126, 234, 0.3)'
-                                        }}>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-                                                <span style={{ color: '#93dac4' }}>Extra Earning:</span>
-                                                <span style={{ color: calculationResult.priceDifference > 0 ? '#4ecca3' : '#ee6c4d', fontWeight: 'bold' }}>
-                                                    {calculationResult.priceDifference > 0 ? '+' : ''}Rs. {calculationResult.priceDifference.toFixed(2)}
-                                                </span>
-                                            </div>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginTop: '5px' }}>
-                                                <span style={{ color: '#93dac4' }}>Extra Profit:</span>
-                                                <span style={{ color: calculationResult.profitDifference > 0 ? '#4ecca3' : '#ee6c4d', fontWeight: 'bold' }}>
-                                                    {calculationResult.profitDifference > 0 ? '+' : ''}Rs. {calculationResult.profitDifference.toFixed(2)}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Recommendation */}
-                                <div style={{
-                                    marginTop: '12px',
-                                    padding: '10px',
-                                    background: calculationResult.offerProfitPerKm >= 10 ? 'rgba(78, 204, 163, 0.1)' : 'rgba(238, 108, 77, 0.1)',
-                                    border: `1px solid ${calculationResult.offerProfitPerKm >= 10 ? '#4ecca3' : '#ee6c4d'}`,
-                                    borderRadius: '8px',
-                                    textAlign: 'center',
-                                    fontSize: '13px',
-                                    color: calculationResult.offerProfitPerKm >= 10 ? '#4ecca3' : '#f4a261'
-                                }}>
-                                    {calculationResult.offerProfitPerKm >= 10
-                                        ? '✅ Good deal! Customer offer is profitable.'
-                                        : '⚠️ Low profit! Consider negotiating higher.'}
-                                </div>
-                            </div>
-                        )}
-
-                        <div className="modal-buttons" style={{ marginTop: '15px' }}>
-                            <button className="btn btn-success" onClick={calculateFare}>
-                                🧮 Calculate
-                            </button>
-                            <button className="btn btn-secondary" onClick={closeFareCalculator}>
-                                Close
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {showTripTypeDialog && (
-                <div className="modal-overlay">
-                    <div className="modal">
-                        <h2>🚗 Select Trip Type</h2>
-                        <p style={{ color: '#93dac4', fontSize: '14px', marginBottom: '20px' }}>
-                            Choose your trip type to start GPS tracking
-                        </p>
-                        <div className="modal-buttons">
-                            <button className="btn btn-primary"
-                                style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}
-                                onClick={() => startTripWithType(true)}>
-                                🚖 Ride Trip
-                                <div style={{ fontSize: '12px', marginTop: '5px', opacity: 0.9 }}>
-                                    Add earnings after completion
-                                </div>
-                            </button>
-                            <button className="btn btn-success" onClick={() => startTripWithType(false)}>
-                                🏍️ Personal Trip
-                            </button>
-                            <button className="btn btn-secondary" onClick={cancelTripTypeSelection}>
-                                Cancel
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
             {showRideCompletionDialog && (
                 <div className="modal-overlay">
                     <div className="modal">
@@ -1832,31 +1867,43 @@ function App() {
 
             <div className="container">
                 {activeScreen === 'dashboard' && renderDashboard()}
-                {activeScreen === 'petrol' && renderPetrolEntry()}
-                {activeScreen === 'gps' && renderGPSTracker()}
+                {activeScreen === 'fuel' && renderPetrolEntry()}
+                {activeScreen === 'personal' && renderPersonalTrip()}
+                {activeScreen === 'ride' && renderRideTrip()}
+                {activeScreen === 'calculator' && renderCalculator()}
                 {activeScreen === 'history' && renderHistory()}
             </div>
 
-            <div className="bottom-nav">
+            <div className="bottom-nav" style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)' }}>
                 <button className={`nav-btn ${activeScreen === 'dashboard' ? 'active' : ''}`}
                     onClick={() => setActiveScreen('dashboard')}>
                     <div className="nav-icon">🏠</div>
-                    <div>Home</div>
+                    <div style={{ fontSize: '10px' }}>Home</div>
                 </button>
-                <button className={`nav-btn ${activeScreen === 'petrol' ? 'active' : ''}`}
-                    onClick={() => setActiveScreen('petrol')}>
+                <button className={`nav-btn ${activeScreen === 'fuel' ? 'active' : ''}`}
+                    onClick={() => setActiveScreen('fuel')}>
                     <div className="nav-icon">⛽</div>
-                    <div>Fuel</div>
+                    <div style={{ fontSize: '10px' }}>Fuel</div>
                 </button>
-                <button className={`nav-btn ${activeScreen === 'gps' ? 'active' : ''}`}
-                    onClick={() => setActiveScreen('gps')}>
-                    <div className="nav-icon">📍</div>
-                    <div>Track</div>
+                <button className={`nav-btn ${activeScreen === 'personal' ? 'active' : ''}`}
+                    onClick={() => setActiveScreen('personal')}>
+                    <div className="nav-icon">🏍️</div>
+                    <div style={{ fontSize: '10px' }}>Personal</div>
+                </button>
+                <button className={`nav-btn ${activeScreen === 'ride' ? 'active' : ''}`}
+                    onClick={() => setActiveScreen('ride')}>
+                    <div className="nav-icon">🚖</div>
+                    <div style={{ fontSize: '10px' }}>Ride</div>
+                </button>
+                <button className={`nav-btn ${activeScreen === 'calculator' ? 'active' : ''}`}
+                    onClick={() => setActiveScreen('calculator')}>
+                    <div className="nav-icon">🧮</div>
+                    <div style={{ fontSize: '10px' }}>Calc</div>
                 </button>
                 <button className={`nav-btn ${activeScreen === 'history' ? 'active' : ''}`}
                     onClick={() => setActiveScreen('history')}>
                     <div className="nav-icon">📜</div>
-                    <div>History</div>
+                    <div style={{ fontSize: '10px' }}>History</div>
                 </button>
             </div>
         </div>

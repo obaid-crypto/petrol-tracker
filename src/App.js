@@ -1,6 +1,13 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import './App.css';
 
+// Mileage calculation configuration
+const MILEAGE_CONFIG = {
+    MIN_DISTANCE_THRESHOLD: 20, // km - minimum distance to trust single-tank mileage
+    ROLLING_WINDOW: 5, // number of recent fills to average
+    ENABLE_ALL_TIME_AVG: true // show long-term average stat
+};
+
 function App() {
     const [activeScreen, setActiveScreen] = useState('dashboard');
     const [petrolEntries, setPetrolEntries] = useState([]);
@@ -51,41 +58,90 @@ function App() {
 
     const [smoothSpeed, setSmoothSpeed] = useState(0);
 
-    useEffect(() => {
-        if (!isTracking) {
-            setSmoothSpeed(0);
-            return;
-        }
-
-        let animationFrameId;
-        const targetSpeed = gpsDebug.speed * 3.6;
-
-        const animate = () => {
-            setSmoothSpeed(prev => {
-                const diff = targetSpeed - prev;
-                if (Math.abs(diff) < 0.05) {
-                    return targetSpeed;
-                }
-                return prev + (diff * 0.06);
-            });
-            animationFrameId = requestAnimationFrame(animate);
-        };
-
-        animate();
-
-        return () => {
-            if (animationFrameId) {
-                cancelAnimationFrame(animationFrameId);
-            }
-        };
-    }, [gpsDebug.speed, isTracking]);
-
     const watchIdRef = useRef(null);
     const lastPositionRef = useRef(null);
     const isInitialMount = useRef(true);
     const positionCountRef = useRef(0);
     const positionHistoryRef = useRef([]);
     const isFirstPositionAfterStart = useRef(true);
+
+    // ==========================================
+    // MILEAGE CALCULATION HELPERS
+    // ==========================================
+
+    /**
+     * Calculate weighted average mileage over last N fuel entries
+     * @param {Array} entries - petrolEntries array (sorted newest first)
+     * @param {number} windowSize - number of recent fills to include
+     * @returns {number} - average km/L
+     */
+    const calculateRollingAverage = useCallback((entries, windowSize = MILEAGE_CONFIG.ROLLING_WINDOW) => {
+        if (!entries || entries.length === 0) return 0;
+
+        const recentEntries = entries.slice(0, Math.min(windowSize, entries.length));
+
+        const totalDistance = recentEntries.reduce((sum, entry) => sum + (entry.kmTraveled || 0), 0);
+        const totalLitres = recentEntries.reduce((sum, entry) => sum + entry.litres, 0);
+
+        return totalLitres > 0 ? totalDistance / totalLitres : 0;
+    }, []);
+
+    /**
+     * Calculate all-time average mileage
+     * @param {Array} entries - all petrolEntries
+     * @returns {number} - lifetime average km/L
+     */
+    const calculateAllTimeAverage = useCallback((entries) => {
+        if (!entries || entries.length === 0) return 0;
+
+        const totalDistance = entries.reduce((sum, entry) => sum + (entry.kmTraveled || 0), 0);
+        const totalLitres = entries.reduce((sum, entry) => sum + entry.litres, 0);
+
+        return totalLitres > 0 ? totalDistance / totalLitres : 0;
+    }, []);
+
+    /**
+     * Get effective mileage for calculations (respects fallback logic)
+     * @param {Array} entries - petrolEntries (newest first)
+     * @returns {Object} - { mileage, source, isEstimated }
+     */
+    const getEffectiveMileage = useCallback((entries) => {
+        if (!entries || entries.length === 0) {
+            return { mileage: 0, source: 'none', isEstimated: false };
+        }
+
+        const lastEntry = entries[0];
+        const rollingAvg = calculateRollingAverage(entries);
+
+        // Check if last tank had enough distance to be trusted
+        const lastTankDistance = lastEntry.kmTraveled || 0;
+        const shouldUseFallback = lastTankDistance < MILEAGE_CONFIG.MIN_DISTANCE_THRESHOLD;
+
+        if (shouldUseFallback && rollingAvg > 0 && entries.length >= 2) {
+            return {
+                mileage: rollingAvg,
+                source: 'rolling-average',
+                isEstimated: true
+            };
+        }
+
+        // Use last tank's mileage if available
+        const lastTankMileage = lastEntry.mileage > 0
+            ? parseFloat(lastEntry.mileage)
+            : (lastEntry.litres > 0 && lastTankDistance > 0
+                ? lastTankDistance / lastEntry.litres
+                : 0);
+
+        return {
+            mileage: lastTankMileage,
+            source: 'last-tank',
+            isEstimated: false
+        };
+    }, [calculateRollingAverage]);
+
+    // ==========================================
+    // GPS & DISTANCE HELPERS
+    // ==========================================
 
     const toRad = useCallback((degrees) => {
         return degrees * (Math.PI / 180);
@@ -123,20 +179,20 @@ function App() {
 
         switch (error.code) {
             case error.PERMISSION_DENIED:
-                message = 'Please allow GPS permission';
+                message = '❌ GPS Permission Denied\n\nGo to Settings → Site Settings → Location';
                 status = 'Permission Denied';
                 break;
             case error.POSITION_UNAVAILABLE:
-                message = 'GPS unavailable. Go outdoors!';
-                status = 'Signal Unavailable';
+                message = '📡 No GPS Signal\n\n• Move outdoors\n• Check if Location is ON\n• Restart device';
+                status = 'No Signal';
                 break;
             case error.TIMEOUT:
-                message = 'GPS timeout. Retrying...';
-                status = 'Searching for signal...';
+                message = '⏱️ GPS Timeout - Retrying...';
+                status = 'Searching...';
                 setGpsDebug(prev => ({ ...prev, status }));
                 return;
             default:
-                message = 'GPS error: ' + error.message;
+                message = '⚠️ GPS Error: ' + error.message;
                 status = 'Error';
         }
 
@@ -228,6 +284,57 @@ function App() {
         }
     }, [calculateDistance]);
 
+    // ==========================================
+    // SMOOTH SPEED ANIMATION (FIXED)
+    // ==========================================
+
+    useEffect(() => {
+        if (!isTracking) {
+            // Smooth transition to 0
+            const interval = setInterval(() => {
+                setSmoothSpeed(prev => {
+                    if (prev < 0.5) {
+                        clearInterval(interval);
+                        return 0;
+                    }
+                    return prev * 0.9;
+                });
+            }, 50);
+
+            return () => clearInterval(interval);
+        }
+
+        let animationFrameId;
+        let isActive = true;
+        const targetSpeed = gpsDebug.speed * 3.6;
+
+        const animate = () => {
+            if (!isActive) return;
+
+            setSmoothSpeed(prev => {
+                const diff = targetSpeed - prev;
+                if (Math.abs(diff) < 0.05) {
+                    return targetSpeed;
+                }
+                return prev + (diff * 0.06);
+            });
+            animationFrameId = requestAnimationFrame(animate);
+        };
+
+        animate();
+
+        return () => {
+            isActive = false;
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+            }
+        };
+    }, [gpsDebug.speed, isTracking]);
+
+    // ==========================================
+    // DATA PERSISTENCE
+    // ==========================================
+
     useEffect(() => {
         const loadData = () => {
             try {
@@ -260,32 +367,44 @@ function App() {
             return;
         }
 
-        try {
-            const data = {
-                petrolEntries,
-                trips,
-                currentTrip,
-                totalKmSinceLastFill,
-                rideEntries,
-                lastSaved: new Date().toISOString()
-            };
-
-            const dataString = JSON.stringify(data);
-            if (dataString.length > 5000000) {
-                const trimmedData = {
-                    ...data,
-                    petrolEntries: data.petrolEntries.slice(0, 50),
-                    trips: data.trips.slice(0, 100),
-                    rideEntries: data.rideEntries.slice(0, 100)
+        const timeoutId = setTimeout(() => {
+            try {
+                const data = {
+                    petrolEntries,
+                    trips,
+                    currentTrip,
+                    totalKmSinceLastFill,
+                    rideEntries,
+                    lastSaved: new Date().toISOString()
                 };
-                localStorage.setItem('petrolTrackerData', JSON.stringify(trimmedData));
-            } else {
+
+                const dataString = JSON.stringify(data);
+
                 localStorage.setItem('petrolTrackerData', dataString);
+            } catch (error) {
+                if (error.name === 'QuotaExceededError') {
+                    const trimmedData = {
+                        petrolEntries: petrolEntries.slice(0, 20),
+                        trips: trips.slice(0, 50),
+                        currentTrip,
+                        totalKmSinceLastFill,
+                        rideEntries: rideEntries.slice(0, 50),
+                        lastSaved: new Date().toISOString()
+                    };
+                    localStorage.setItem('petrolTrackerData', JSON.stringify(trimmedData));
+                    alert('⚠️ Storage full! Trimmed old data');
+                } else {
+                    console.error('Storage error:', error);
+                }
             }
-        } catch (error) {
-            console.error('Storage error:', error);
-        }
+        }, 1000);
+
+        return () => clearTimeout(timeoutId);
     }, [petrolEntries, trips, currentTrip, totalKmSinceLastFill, rideEntries]);
+
+    // ==========================================
+    // PWA INSTALL PROMPT
+    // ==========================================
 
     useEffect(() => {
         const handler = (e) => {
@@ -305,6 +424,34 @@ function App() {
 
         return () => window.removeEventListener('beforeinstallprompt', handler);
     }, []);
+
+    // ==========================================
+    // PREVENT ACCIDENTAL BACK DURING TRACKING
+    // ==========================================
+
+    useEffect(() => {
+        const handleBackButton = (e) => {
+            if (isTracking) {
+                const confirmStop = window.confirm('⚠️ Trip is running!\n\nStop trip and go back?');
+                if (confirmStop) {
+                    stopTrip();
+                } else {
+                    window.history.pushState(null, '', window.location.pathname);
+                }
+            }
+        };
+
+        if (isTracking) {
+            window.history.pushState(null, '', window.location.pathname);
+            window.addEventListener('popstate', handleBackButton);
+        }
+
+        return () => window.removeEventListener('popstate', handleBackButton);
+    }, [isTracking]);
+
+    // ==========================================
+    // RESET DATA
+    // ==========================================
 
     const handleResetRequest = () => {
         setShowResetConfirm(true);
@@ -372,6 +519,35 @@ function App() {
         setDeferredPrompt(null);
     };
 
+    // ==========================================
+    // EXPORT DATA
+    // ==========================================
+
+    const exportData = () => {
+        const data = {
+            petrolEntries,
+            trips,
+            rideEntries,
+            totalKmSinceLastFill,
+            exportDate: new Date().toISOString(),
+            appVersion: '2.0'
+        };
+
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `petrol-tracker-${new Date().toISOString().split('T')[0]}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+
+        alert('✅ Data exported successfully!');
+    };
+
+    // ==========================================
+    // PETROL ENTRY
+    // ==========================================
+
     const savePetrolEntry = () => {
         const litresNum = parseFloat(litres);
         const priceNum = parseFloat(pricePerLitre);
@@ -394,6 +570,14 @@ function App() {
         const roundedLitres = Math.round(litresNum * 100) / 100;
         const roundedPrice = Math.round(priceNum * 100) / 100;
 
+        // Calculate this tank's mileage
+        const tankMileage = totalKmSinceLastFill > 0
+            ? (totalKmSinceLastFill / roundedLitres).toFixed(2)
+            : 0;
+
+        // Determine if this is an estimated entry (short tank)
+        const isShortTank = totalKmSinceLastFill < MILEAGE_CONFIG.MIN_DISTANCE_THRESHOLD && totalKmSinceLastFill > 0;
+
         const entry = {
             id: Date.now(),
             litres: roundedLitres,
@@ -401,7 +585,9 @@ function App() {
             totalCost: roundedLitres * roundedPrice,
             date: fillDate,
             kmTraveled: totalKmSinceLastFill,
-            mileage: totalKmSinceLastFill > 0 ? (totalKmSinceLastFill / roundedLitres).toFixed(2) : 0
+            mileage: tankMileage,
+            isEstimated: isShortTank,
+            createdAt: new Date().toISOString()
         };
 
         setPetrolEntries(prev => [entry, ...prev]);
@@ -412,9 +598,23 @@ function App() {
         const today = new Date().toISOString().split('T')[0];
         setFillDate(today);
 
-        alert('✅ Petrol entry saved!');
+        // Show appropriate message
+        if (isShortTank) {
+            const rollingAvg = calculateRollingAverage([entry, ...petrolEntries]);
+            alert(`⚠️ Short tank detected (${totalKmSinceLastFill.toFixed(1)} km)\n\n` +
+                `Tank mileage: ${tankMileage} km/L (estimated)\n` +
+                (rollingAvg > 0 ? `Using 5-fill average (${rollingAvg.toFixed(2)} km/L) for calculations.\n\n` : '\n') +
+                `✅ Entry saved!`);
+        } else {
+            alert('✅ Petrol entry saved!');
+        }
+
         setActiveScreen('dashboard');
     };
+
+    // ==========================================
+    // MANUAL KM ENTRY
+    // ==========================================
 
     const handleManualEntryRequest = () => {
         setShowManualEntry(true);
@@ -456,6 +656,10 @@ function App() {
         setShowManualEntry(false);
     };
 
+    // ==========================================
+    // RIDE ENTRY (MANUAL)
+    // ==========================================
+
     const handleRideEntryRequest = () => {
         setShowRideEntry(true);
     };
@@ -484,21 +688,16 @@ function App() {
         const roundedEarnings = Math.round(earningsNum * 100) / 100;
         const roundedTip = Math.round(tipNum * 100) / 100;
 
-        const lastEntry = petrolEntries[0];
+        const effectiveMileageData = getEffectiveMileage(petrolEntries);
         let costPerKm = 0;
         let fuelUsed = 0;
         let fuelCost = 0;
 
-        if (lastEntry) {
-            const mileage = lastEntry.mileage > 0 ? parseFloat(lastEntry.mileage) :
-                (lastEntry.litres > 0 && totalKmSinceLastFill > 0 ?
-                    totalKmSinceLastFill / lastEntry.litres : 0);
-
-            if (mileage > 0) {
-                fuelUsed = roundedKm / mileage;
-                fuelCost = fuelUsed * lastEntry.pricePerLitre;
-                costPerKm = lastEntry.pricePerLitre / mileage;
-            }
+        if (petrolEntries.length > 0 && effectiveMileageData.mileage > 0) {
+            const lastEntry = petrolEntries[0];
+            fuelUsed = roundedKm / effectiveMileageData.mileage;
+            fuelCost = fuelUsed * lastEntry.pricePerLitre;
+            costPerKm = lastEntry.pricePerLitre / effectiveMileageData.mileage;
         }
 
         const totalEarnings = roundedEarnings + roundedTip;
@@ -516,7 +715,9 @@ function App() {
             fuelCost: fuelCost,
             profit: profit,
             profitPerKm: profitPerKm,
-            costPerKm: costPerKm
+            costPerKm: costPerKm,
+            mileageUsed: effectiveMileageData.mileage,
+            mileageSource: effectiveMileageData.source
         };
 
         setRideEntries(prev => [rideEntry, ...prev]);
@@ -539,12 +740,16 @@ function App() {
         setRideTip('');
         setShowRideEntry(false);
 
+        const mileageInfo = effectiveMileageData.isEstimated
+            ? `(using 5-fill avg: ${effectiveMileageData.mileage.toFixed(2)} km/L)`
+            : `(using current tank: ${effectiveMileageData.mileage.toFixed(2)} km/L)`;
+
         alert(`✅ Ride Saved!\n\n` +
             `Distance: ${roundedKm} km\n` +
             `Base Fare: Rs. ${roundedEarnings}\n` +
-            (roundedTip > 0 ? `Tip: Rs. ${roundedTip}\n` : '') +
-            `Total Earnings: Rs. ${totalEarnings}\n` +
-            `Fuel Used: ${fuelUsed.toFixed(2)} L\n` +
+            (roundedTip > 0 ? `Tip: Rs. ${roundedTip} 🎁\n` : '') +
+            `Total Earnings: Rs. ${totalEarnings.toFixed(2)}\n` +
+            `Fuel Used: ${fuelUsed.toFixed(2)} L ${mileageInfo}\n` +
             `Fuel Cost: Rs. ${fuelCost.toFixed(2)}\n` +
             `━━━━━━━━━━━━━━━\n` +
             `💰 Profit: Rs. ${profit.toFixed(2)}\n` +
@@ -558,6 +763,10 @@ function App() {
         setRideTip('');
         setShowRideEntry(false);
     };
+
+    // ==========================================
+    // FARE CALCULATOR
+    // ==========================================
 
     const calculateFare = () => {
         const km = parseFloat(calcKm);
@@ -574,21 +783,16 @@ function App() {
             return;
         }
 
-        const lastEntry = petrolEntries[0];
+        const effectiveMileageData = getEffectiveMileage(petrolEntries);
         let costPerKm = 0;
         let fuelUsed = 0;
         let fuelCost = 0;
 
-        if (lastEntry) {
-            const mileage = lastEntry.mileage > 0 ? parseFloat(lastEntry.mileage) :
-                (lastEntry.litres > 0 && totalKmSinceLastFill > 0 ?
-                    totalKmSinceLastFill / lastEntry.litres : 0);
-
-            if (mileage > 0) {
-                fuelUsed = km / mileage;
-                fuelCost = fuelUsed * lastEntry.pricePerLitre;
-                costPerKm = lastEntry.pricePerLitre / mileage;
-            }
+        if (petrolEntries.length > 0 && effectiveMileageData.mileage > 0) {
+            const lastEntry = petrolEntries[0];
+            fuelUsed = km / effectiveMileageData.mileage;
+            fuelCost = fuelUsed * lastEntry.pricePerLitre;
+            costPerKm = lastEntry.pricePerLitre / effectiveMileageData.mileage;
         }
 
         const offerProfit = offerPrice - fuelCost;
@@ -618,7 +822,10 @@ function App() {
             myProfit: myProfit,
             myProfitPerKm: myProfitPerKm,
             priceDifference: priceDifference,
-            profitDifference: profitDifference
+            profitDifference: profitDifference,
+            mileageSource: effectiveMileageData.source,
+            mileageValue: effectiveMileageData.mileage,
+            isEstimated: effectiveMileageData.isEstimated
         });
     };
 
@@ -628,6 +835,10 @@ function App() {
         setCalcMyPrice('');
         setCalculationResult(null);
     };
+
+    // ==========================================
+    // GPS TRACKING
+    // ==========================================
 
     const startGPSTracking = (isRideTrip = false) => {
         if (!navigator.geolocation) {
@@ -779,21 +990,16 @@ function App() {
         const roundedTip = Math.round(tipNum * 100) / 100;
         const actualKm = completedRideKm;
 
-        const lastEntry = petrolEntries[0];
+        const effectiveMileageData = getEffectiveMileage(petrolEntries);
         let costPerKm = 0;
         let fuelUsed = 0;
         let fuelCost = 0;
 
-        if (lastEntry) {
-            const mileage = lastEntry.mileage > 0 ? parseFloat(lastEntry.mileage) :
-                (lastEntry.litres > 0 && totalKmSinceLastFill > 0 ?
-                    totalKmSinceLastFill / lastEntry.litres : 0);
-
-            if (mileage > 0) {
-                fuelUsed = actualKm / mileage;
-                fuelCost = fuelUsed * lastEntry.pricePerLitre;
-                costPerKm = lastEntry.pricePerLitre / mileage;
-            }
+        if (petrolEntries.length > 0 && effectiveMileageData.mileage > 0) {
+            const lastEntry = petrolEntries[0];
+            fuelUsed = actualKm / effectiveMileageData.mileage;
+            fuelCost = fuelUsed * lastEntry.pricePerLitre;
+            costPerKm = lastEntry.pricePerLitre / effectiveMileageData.mileage;
         }
 
         const totalEarnings = roundedEarnings + roundedTip;
@@ -811,7 +1017,9 @@ function App() {
             fuelCost: fuelCost,
             profit: profit,
             profitPerKm: profitPerKm,
-            costPerKm: costPerKm
+            costPerKm: costPerKm,
+            mileageUsed: effectiveMileageData.mileage,
+            mileageSource: effectiveMileageData.source
         };
 
         setRideEntries(prev => [rideEntry, ...prev]);
@@ -831,12 +1039,16 @@ function App() {
         setShowRideCompletionDialog(false);
         setCompletedRideKm(0);
 
+        const mileageInfo = effectiveMileageData.isEstimated
+            ? `(using 5-fill avg: ${effectiveMileageData.mileage.toFixed(2)} km/L)`
+            : `(using current tank: ${effectiveMileageData.mileage.toFixed(2)} km/L)`;
+
         alert(`✅ Ride Completed!\n\n` +
             `Distance: ${actualKm.toFixed(2)} km\n` +
             `Base Fare: Rs. ${roundedEarnings}\n` +
             (roundedTip > 0 ? `Tip: Rs. ${roundedTip} 🎁\n` : '') +
-            `Total Earnings: Rs. ${totalEarnings}\n` +
-            `Fuel Used: ${fuelUsed.toFixed(2)} L\n` +
+            `Total Earnings: Rs. ${totalEarnings.toFixed(2)}\n` +
+            `Fuel Used: ${fuelUsed.toFixed(2)} L ${mileageInfo}\n` +
             `Fuel Cost: Rs. ${fuelCost.toFixed(2)}\n` +
             `━━━━━━━━━━━━━━━\n` +
             `💰 Net Profit: Rs. ${profit.toFixed(2)}\n` +
@@ -859,7 +1071,11 @@ function App() {
         setCompletedRideKm(0);
     };
 
-    const getMonthlySummary = () => {
+    // ==========================================
+    // SUMMARY CALCULATIONS (MEMOIZED)
+    // ==========================================
+
+    const getMonthlySummary = useMemo(() => {
         const now = new Date();
         const currentMonth = now.getMonth();
         const currentYear = now.getFullYear();
@@ -886,9 +1102,9 @@ function App() {
 
         const avgMileage = totalLitres > 0 ? (totalKm / totalLitres).toFixed(2) : '0';
         return { totalLitres, totalSpent, totalKm, avgMileage };
-    };
+    }, [petrolEntries, totalKmSinceLastFill]);
 
-    const getRideSummary = () => {
+    const getRideSummary = useMemo(() => {
         const now = new Date();
         const currentMonth = now.getMonth();
         const currentYear = now.getFullYear();
@@ -926,7 +1142,11 @@ function App() {
             avgProfitPerRide,
             avgProfitPerKm
         };
-    };
+    }, [rideEntries]);
+
+    // ==========================================
+    // SPEEDOMETER COMPONENT
+    // ==========================================
 
     const Speedometer = useMemo(() => {
         return React.memo(({ speed }) => {
@@ -991,12 +1211,24 @@ function App() {
         });
     }, []);
 
+    // ==========================================
+    // RENDER FUNCTIONS
+    // ==========================================
+
     const renderDashboard = () => {
-        const monthly = getMonthlySummary();
+        const monthly = getMonthlySummary;
         const lastEntry = petrolEntries[0];
+
+        const effectiveMileageData = getEffectiveMileage(petrolEntries);
+        const rollingAvg = calculateRollingAverage(petrolEntries);
+
         const currentMileage = lastEntry && totalKmSinceLastFill > 0
             ? (totalKmSinceLastFill / lastEntry.litres).toFixed(2)
             : 'N/A';
+
+        const mileageDelta = currentMileage !== 'N/A' && rollingAvg > 0
+            ? (parseFloat(currentMileage) - rollingAvg).toFixed(1)
+            : null;
 
         return (
             <div>
@@ -1024,20 +1256,59 @@ function App() {
                             <p>No petrol entry yet!</p>
                         </div>
                     ) : (
-                        <div className="stats-grid">
-                            <div className="stat-box">
-                                <div className="stat-label">Litres</div>
-                                <div className="stat-value">{lastEntry.litres}<span className="stat-unit">L</span></div>
+                        <>
+                            <div className="stats-grid">
+                                <div className="stat-box">
+                                    <div className="stat-label">Litres</div>
+                                    <div className="stat-value">{lastEntry.litres}<span className="stat-unit">L</span></div>
+                                </div>
+                                <div className="stat-box">
+                                    <div className="stat-label">Distance</div>
+                                    <div className="stat-value">{totalKmSinceLastFill.toFixed(2)}<span className="stat-unit">km</span></div>
+                                </div>
+                                <div className="stat-box full-width">
+                                    <div className="stat-label">Current Mileage</div>
+                                    <div className="stat-value large">
+                                        {currentMileage}
+                                        <span className="stat-unit">km/L</span>
+                                        {lastEntry.isEstimated && (
+                                            <span className="estimation-badge">EST</span>
+                                        )}
+                                    </div>
+                                    {mileageDelta !== null && (
+                                        <div className={`mileage-trend ${parseFloat(mileageDelta) >= 0 ? 'positive' : 'negative'}`}>
+                                            {parseFloat(mileageDelta) >= 0 ? '↑' : '↓'} {Math.abs(mileageDelta)} km/L vs 5-fill avg
+                                        </div>
+                                    )}
+                                </div>
                             </div>
-                            <div className="stat-box">
-                                <div className="stat-label">Distance</div>
-                                <div className="stat-value">{totalKmSinceLastFill.toFixed(2)}<span className="stat-unit">km</span></div>
-                            </div>
-                            <div className="stat-box full-width">
-                                <div className="stat-label">Mileage</div>
-                                <div className="stat-value large">{currentMileage}<span className="stat-unit">km/L</span></div>
-                            </div>
-                        </div>
+
+                            {petrolEntries.length >= 2 && rollingAvg > 0 && (
+                                <div className="rolling-avg-panel">
+                                    <div style={{
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center'
+                                    }}>
+                                        <span>5-Fill Average:</span>
+                                        <span style={{
+                                            fontSize: '18px',
+                                            fontWeight: 'bold',
+                                            color: '#4ecca3'
+                                        }}>
+                                            {rollingAvg.toFixed(2)} km/L
+                                        </span>
+                                    </div>
+                                    <div style={{
+                                        fontSize: '11px',
+                                        color: '#a0b2c6',
+                                        marginTop: '5px'
+                                    }}>
+                                        📊 Based on last {Math.min(MILEAGE_CONFIG.ROLLING_WINDOW, petrolEntries.length)} fills
+                                    </div>
+                                </div>
+                            )}
+                        </>
                     )}
                 </div>
 
@@ -1066,6 +1337,9 @@ function App() {
                 {petrolEntries.length > 0 && (
                     <div className="card">
                         <h2>⚙️ Settings</h2>
+                        <button className="btn btn-secondary" onClick={exportData} style={{ marginBottom: '10px' }}>
+                            📥 Export Data (JSON)
+                        </button>
                         <button className="btn btn-danger" onClick={handleResetRequest}>
                             🗑️ Reset All Data
                         </button>
@@ -1102,6 +1376,11 @@ function App() {
                 {totalKmSinceLastFill > 0 && (
                     <div className="alert">
                         📍 Distance: <strong>{totalKmSinceLastFill.toFixed(2)} km</strong>
+                        {totalKmSinceLastFill < MILEAGE_CONFIG.MIN_DISTANCE_THRESHOLD && (
+                            <div style={{ marginTop: '8px', fontSize: '12px', color: '#f4a261' }}>
+                                ⚠️ Short tank - will use 5-fill average for calculations
+                            </div>
+                        )}
                     </div>
                 )}
                 <button className="btn btn-success" onClick={savePetrolEntry}>
@@ -1111,30 +1390,17 @@ function App() {
         );
     };
 
-    // NEW: Personal Trip Tab
     const renderPersonalTrip = () => {
         const currentTripKm = currentTrip && currentTrip.isActive && !currentTrip.isRide
             ? currentTrip.distance.toFixed(2)
             : '0.00';
 
         const lastEntry = petrolEntries[0];
-        const monthly = getMonthlySummary();
+        const effectiveMileageData = getEffectiveMileage(petrolEntries);
 
-        let effectiveMileage = 0;
-        if (lastEntry && lastEntry.mileage > 0) {
-            effectiveMileage = parseFloat(lastEntry.mileage);
-        } else if (parseFloat(monthly.avgMileage) > 0) {
-            effectiveMileage = parseFloat(monthly.avgMileage);
-        } else if (lastEntry && lastEntry.litres > 0 && totalKmSinceLastFill > 0) {
-            effectiveMileage = totalKmSinceLastFill / lastEntry.litres;
-        }
-
-        let costPerKm = 0;
-        if (lastEntry && effectiveMileage > 0) {
-            costPerKm = lastEntry.pricePerLitre / effectiveMileage;
-        } else if (lastEntry && lastEntry.kmTraveled > 0) {
-            costPerKm = lastEntry.totalCost / lastEntry.kmTraveled;
-        }
+        const costPerKm = effectiveMileageData.mileage > 0 && lastEntry
+            ? lastEntry.pricePerLitre / effectiveMileageData.mileage
+            : 0;
 
         const tankCostIncurred = costPerKm * totalKmSinceLastFill;
         const currentTripDistanceVal = currentTrip && currentTrip.isActive && !currentTrip.isRide ? currentTrip.distance : 0;
@@ -1152,7 +1418,7 @@ function App() {
                     {isPersonalTripActive && <Speedometer speed={smoothSpeed} />}
 
                     {isPersonalTripActive && (
-                        <div style={{
+                        <div className="trip-type-badge" style={{
                             background: 'linear-gradient(135deg, #4ecca3 0%, #3baf84 100%)',
                             padding: '10px 15px',
                             borderRadius: '8px',
@@ -1187,6 +1453,21 @@ function App() {
                         )}
                     </div>
 
+                    {isPersonalTripActive && gpsDebug.accuracy > 50 && (
+                        <div style={{
+                            background: 'rgba(238, 108, 77, 0.1)',
+                            border: '1px solid #ee6c4d',
+                            borderRadius: '8px',
+                            padding: '10px',
+                            marginBottom: '15px',
+                            fontSize: '12px',
+                            color: '#f4a261'
+                        }}>
+                            ⚠️ Poor GPS accuracy ({gpsDebug.accuracy.toFixed(0)}m)
+                            <br />Move to open area for better tracking
+                        </div>
+                    )}
+
                     <div className="trip-status-grid">
                         <div className={`trip-status-compact ${isPersonalTripActive ? 'tracking' : ''}`}>
                             <div className="trip-label-small">CURRENT TRIP</div>
@@ -1200,7 +1481,7 @@ function App() {
 
                     {!isPersonalTripActive ? (
                         <>
-                            <button className="btn btn-success btn-lg" onClick={() => startGPSTracking(false)}>
+                            <button className="btn btn-success btn-lg btn-personal-trip" onClick={() => startGPSTracking(false)}>
                                 ▶️ START PERSONAL TRIP
                             </button>
                             <button className="btn btn-secondary btn-lg" style={{ marginTop: '10px' }}
@@ -1230,39 +1511,54 @@ function App() {
                             </p>
                         </div>
                     ) : (
-                        <div className="cost-grid">
-                            <div className="cost-box highlight">
-                                <div className="cost-label">TANK SPENT</div>
-                                <div className="cost-value">Rs. {tankCostIncurred.toFixed(1)}</div>
-                                <div className="cost-subtext">of Rs. {totalTankCost.toFixed(0)} filled</div>
-                            </div>
-                            <div className="cost-box">
-                                <div className="cost-label">TRIP COST</div>
-                                <div className="cost-value">Rs. {tripCostIncurred.toFixed(1)}</div>
-                                <div className="cost-subtext">{currentTripDistanceVal.toFixed(1)} km trip</div>
-                            </div>
-                            <div className="cost-box">
-                                <div className="cost-label">COST / KM</div>
-                                <div className="cost-value">Rs. {costPerKm.toFixed(2)}</div>
-                                <div className="cost-subtext">per km driven</div>
-                            </div>
-                            <div className="cost-box">
-                                <div className="cost-label">FUEL LEFT VALUE</div>
-                                <div className="cost-value" style={{ color: remainingFuelValue > 0 ? '#4ecca3' : '#ee6c4d' }}>
-                                    Rs. {remainingFuelValue.toFixed(1)}
+                        <>
+                            {effectiveMileageData.isEstimated && (
+                                <div style={{
+                                    background: 'rgba(244, 162, 97, 0.1)',
+                                    border: '1px solid #f4a261',
+                                    borderRadius: '8px',
+                                    padding: '8px',
+                                    marginBottom: '12px',
+                                    fontSize: '11px',
+                                    color: '#f4a261',
+                                    textAlign: 'center'
+                                }}>
+                                    ℹ️ Using 5-fill average ({effectiveMileageData.mileage.toFixed(2)} km/L) - last tank was short
                                 </div>
-                                <div className="cost-subtext">est. remaining</div>
+                            )}
+                            <div className="cost-grid">
+                                <div className="cost-box highlight">
+                                    <div className="cost-label">TANK SPENT</div>
+                                    <div className="cost-value">Rs. {tankCostIncurred.toFixed(1)}</div>
+                                    <div className="cost-subtext">of Rs. {totalTankCost.toFixed(0)} filled</div>
+                                </div>
+                                <div className="cost-box">
+                                    <div className="cost-label">TRIP COST</div>
+                                    <div className="cost-value">Rs. {tripCostIncurred.toFixed(1)}</div>
+                                    <div className="cost-subtext">{currentTripDistanceVal.toFixed(1)} km trip</div>
+                                </div>
+                                <div className="cost-box">
+                                    <div className="cost-label">COST / KM</div>
+                                    <div className="cost-value">Rs. {costPerKm.toFixed(2)}</div>
+                                    <div className="cost-subtext">per km driven</div>
+                                </div>
+                                <div className="cost-box">
+                                    <div className="cost-label">FUEL LEFT VALUE</div>
+                                    <div className="cost-value" style={{ color: remainingFuelValue > 0 ? '#4ecca3' : '#ee6c4d' }}>
+                                        Rs. {remainingFuelValue.toFixed(1)}
+                                    </div>
+                                    <div className="cost-subtext">est. remaining</div>
+                                </div>
                             </div>
-                        </div>
+                        </>
                     )}
                 </div>
             </div>
         );
     };
 
-    // NEW: Ride Trip Tab
     const renderRideTrip = () => {
-        const rideSummary = getRideSummary();
+        const rideSummary = getRideSummary;
         const currentRideTripKm = currentTrip && currentTrip.isActive && currentTrip.isRide
             ? currentTrip.distance.toFixed(2)
             : '0.00';
@@ -1277,7 +1573,7 @@ function App() {
                     {isRideTripActive && <Speedometer speed={smoothSpeed} />}
 
                     {isRideTripActive && (
-                        <div style={{
+                        <div className="trip-type-badge" style={{
                             background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                             padding: '10px 15px',
                             borderRadius: '8px',
@@ -1312,6 +1608,21 @@ function App() {
                         )}
                     </div>
 
+                    {isRideTripActive && gpsDebug.accuracy > 50 && (
+                        <div style={{
+                            background: 'rgba(238, 108, 77, 0.1)',
+                            border: '1px solid #ee6c4d',
+                            borderRadius: '8px',
+                            padding: '10px',
+                            marginBottom: '15px',
+                            fontSize: '12px',
+                            color: '#f4a261'
+                        }}>
+                            ⚠️ Poor GPS accuracy ({gpsDebug.accuracy.toFixed(0)}m)
+                            <br />Move to open area for better tracking
+                        </div>
+                    )}
+
                     <div className="trip-status-grid">
                         <div className={`trip-status-compact ${isRideTripActive ? 'tracking' : ''}`}>
                             <div className="trip-label-small">CURRENT RIDE</div>
@@ -1325,10 +1636,10 @@ function App() {
 
                     {!isRideTripActive ? (
                         <>
-                            <button className="btn btn-primary btn-lg"
-                                style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}
+                            <button className="btn btn-primary btn-lg btn-ride-trip"
                                 onClick={() => startGPSTracking(true)}>
                                 ▶️ START RIDE TRIP
+                                <div className="btn-subtitle">GPS tracking + earnings</div>
                             </button>
                             <button className="btn btn-secondary btn-lg" style={{ marginTop: '10px' }}
                                 onClick={handleRideEntryRequest}>
@@ -1348,8 +1659,7 @@ function App() {
                     )}
                 </div>
 
-                {/* Monthly Earnings Summary */}
-                <div className="card">
+                <div className="card ride-summary-card">
                     <h2>💰 Monthly Earnings</h2>
                     {rideEntries.length === 0 ? (
                         <div className="empty-state">
@@ -1382,7 +1692,7 @@ function App() {
                                 <div className="stat-label">Avg Profit/Ride</div>
                                 <div className="stat-value" style={{ fontSize: '20px', color: '#4ecca3' }}>Rs. {rideSummary.avgProfitPerRide.toFixed(0)}</div>
                             </div>
-                            <div className="stat-box full-width" style={{ background: 'linear-gradient(135deg, #1a4d6d 0%, #2a5f7f 100%)' }}>
+                            <div className="stat-box full-width profit-box">
                                 <div className="stat-label">💰 NET PROFIT</div>
                                 <div className="stat-value large" style={{ color: rideSummary.totalProfit > 0 ? '#4ecca3' : '#ee6c4d' }}>
                                     Rs. {rideSummary.totalProfit.toFixed(2)}
@@ -1395,7 +1705,6 @@ function App() {
                     )}
                 </div>
 
-                {/* Ride History */}
                 <div className="card">
                     <h2>📜 Ride History</h2>
                     {rideEntries.length === 0 ? (
@@ -1420,7 +1729,12 @@ function App() {
                                         <div className="history-header">
                                             <div className="history-date">{formattedDate} • {formattedTime}</div>
                                             <div className="history-mileage"
-                                                style={{ color: ride.profit > 0 ? '#4ecca3' : '#ee6c4d', fontWeight: 'bold' }}>
+                                                style={{
+                                                    color: ride.profit > 0 ? '#4ecca3' : '#ee6c4d',
+                                                    fontWeight: 'bold',
+                                                    background: ride.profit > 0 ? 'rgba(78, 204, 163, 0.2)' : 'rgba(238, 108, 77, 0.2)',
+                                                    border: `1px solid ${ride.profit > 0 ? '#4ecca3' : '#ee6c4d'}`
+                                                }}>
                                                 Rs. {ride.profit.toFixed(2)}
                                             </div>
                                         </div>
@@ -1449,9 +1763,14 @@ function App() {
                                         <div style={{
                                             marginTop: '8px', padding: '8px',
                                             background: 'rgba(66, 230, 207, 0.1)',
-                                            borderRadius: '6px', fontSize: '12px', color: '#93dac4'
+                                            borderRadius: '6px', fontSize: '11px', color: '#93dac4'
                                         }}>
                                             💰 Profit/km: Rs. {ride.profitPerKm.toFixed(2)} | Cost/km: Rs. {ride.costPerKm.toFixed(2)}
+                                            {ride.mileageSource === 'rolling-average' && (
+                                                <span className="estimation-badge" style={{ marginLeft: '6px' }}>
+                                                    5-AVG
+                                                </span>
+                                            )}
                                         </div>
                                     </div>
                                 );
@@ -1500,21 +1819,13 @@ function App() {
                     </div>
 
                     {petrolEntries.length === 0 && (
-                        <div style={{
-                            background: 'rgba(238, 108, 77, 0.1)',
-                            border: '1px solid #ee6c4d',
-                            borderRadius: '8px',
-                            padding: '12px',
-                            marginBottom: '15px',
-                            fontSize: '13px',
-                            color: '#f4a261'
-                        }}>
+                        <div className="modal-warning">
                             ⚠️ Add fuel data first for accurate calculations
                         </div>
                     )}
 
                     <div style={{ display: 'flex', gap: '10px' }}>
-                        <button className="btn btn-success" onClick={calculateFare} style={{ flex: 1 }}>
+                        <button className="btn btn-success btn-calculator" onClick={calculateFare} style={{ flex: 1 }}>
                             🧮 Calculate
                         </button>
                         <button className="btn btn-secondary" onClick={clearCalculator} style={{ flex: 1 }}>
@@ -1524,99 +1835,84 @@ function App() {
                 </div>
 
                 {calculationResult && (
-                    <div className="card" style={{
-                        background: 'linear-gradient(135deg, #1a4d6d 0%, #0f3460 100%)',
-                        border: '2px solid #4ecca3'
-                    }}>
-                        <div style={{ textAlign: 'center', color: '#4ecca3', fontSize: '16px', marginBottom: '15px', fontWeight: 'bold' }}>
+                    <div className="card calc-result-section">
+                        <div className="calc-section-header">
                             📊 CALCULATION RESULT
                         </div>
 
-                        {/* Fuel Cost */}
                         <div style={{
-                            background: 'rgba(238, 108, 77, 0.1)',
-                            padding: '12px',
-                            borderRadius: '8px',
+                            fontSize: '11px',
+                            color: '#93dac4',
+                            textAlign: 'center',
                             marginBottom: '12px',
-                            border: '1px solid #ee6c4d'
+                            padding: '6px',
+                            background: 'rgba(15, 52, 96, 0.5)',
+                            borderRadius: '6px'
                         }}>
+                            Using {calculationResult.mileageValue.toFixed(2)} km/L
+                            ({calculationResult.isEstimated ? '5-fill average' : 'current tank'})
+                        </div>
+
+                        <div className="calc-fuel-box">
                             <div style={{ fontSize: '12px', color: '#93dac4', marginBottom: '8px', fontWeight: 'bold' }}>
                                 ⛽ FUEL COST
                             </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', marginBottom: '5px' }}>
-                                <span style={{ color: '#e8e8e8' }}>Cost/km:</span>
-                                <span style={{ color: '#ee6c4d', fontWeight: 'bold' }}>Rs. {calculationResult.costPerKm.toFixed(2)}</span>
+                            <div className="calc-comparison-row">
+                                <span className="calc-comparison-label">Cost/km:</span>
+                                <span className="calc-comparison-value" style={{ color: '#ee6c4d' }}>Rs. {calculationResult.costPerKm.toFixed(2)}</span>
                             </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px' }}>
-                                <span style={{ color: '#e8e8e8' }}>Total Fuel Cost:</span>
-                                <span style={{ color: '#ee6c4d', fontWeight: 'bold' }}>Rs. {calculationResult.fuelCost.toFixed(2)}</span>
+                            <div className="calc-comparison-row">
+                                <span className="calc-comparison-label">Total Fuel Cost:</span>
+                                <span className="calc-comparison-value" style={{ color: '#ee6c4d' }}>Rs. {calculationResult.fuelCost.toFixed(2)}</span>
                             </div>
                         </div>
 
-                        {/* Customer Offer */}
-                        <div style={{
-                            background: 'rgba(78, 204, 163, 0.1)',
-                            padding: '12px',
-                            borderRadius: '8px',
-                            marginBottom: '12px',
-                            border: '1px solid #4ecca3'
-                        }}>
+                        <div className="calc-offer-box">
                             <div style={{ fontSize: '12px', color: '#93dac4', marginBottom: '8px', fontWeight: 'bold' }}>
                                 💵 CUSTOMER OFFER: Rs. {calculationResult.offerPrice}
                             </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '16px', marginTop: '10px' }}>
-                                <span style={{ color: '#e8e8e8' }}>Your Profit:</span>
-                                <span style={{ color: calculationResult.offerProfit > 0 ? '#4ecca3' : '#ee6c4d', fontWeight: 'bold', fontSize: '20px' }}>
+                            <div className="calc-comparison-row" style={{ marginTop: '10px' }}>
+                                <span className="calc-comparison-label">Your Profit:</span>
+                                <span className={`calc-comparison-value calc-profit-large ${calculationResult.offerProfit > 0 ? 'calc-profit-positive' : 'calc-profit-negative'}`}>
                                     Rs. {calculationResult.offerProfit.toFixed(2)}
                                 </span>
                             </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', marginTop: '8px' }}>
-                                <span style={{ color: '#93dac4' }}>Per km:</span>
-                                <span style={{ color: calculationResult.offerProfitPerKm > 0 ? '#4ecca3' : '#ee6c4d', fontWeight: 'bold' }}>
+                            <div className="calc-comparison-row" style={{ marginTop: '8px' }}>
+                                <span className="calc-comparison-label">Per km:</span>
+                                <span className={calculationResult.offerProfitPerKm > 0 ? 'calc-profit-positive' : 'calc-profit-negative'}>
                                     Rs. {calculationResult.offerProfitPerKm.toFixed(2)}/km
                                 </span>
                             </div>
                         </div>
 
-                        {/* Your Counter Offer */}
                         {calculationResult.myPrice > 0 && (
-                            <div style={{
-                                background: 'rgba(102, 126, 234, 0.15)',
-                                padding: '12px',
-                                borderRadius: '8px',
-                                border: '2px solid #667eea',
-                                marginBottom: '12px'
-                            }}>
+                            <div className="calc-counter-box">
                                 <div style={{ fontSize: '12px', color: '#93dac4', marginBottom: '8px', fontWeight: 'bold' }}>
                                     🎯 YOUR COUNTER: Rs. {calculationResult.myPrice}
                                 </div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '16px', marginTop: '10px' }}>
-                                    <span style={{ color: '#e8e8e8' }}>Your Profit:</span>
-                                    <span style={{ color: calculationResult.myProfit > 0 ? '#4ecca3' : '#ee6c4d', fontWeight: 'bold', fontSize: '20px' }}>
+                                <div className="calc-comparison-row" style={{ marginTop: '10px' }}>
+                                    <span className="calc-comparison-label">Your Profit:</span>
+                                    <span className={`calc-comparison-value calc-profit-large ${calculationResult.myProfit > 0 ? 'calc-profit-positive' : 'calc-profit-negative'}`}>
                                         Rs. {calculationResult.myProfit.toFixed(2)}
                                     </span>
                                 </div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', marginTop: '8px' }}>
-                                    <span style={{ color: '#93dac4' }}>Per km:</span>
-                                    <span style={{ color: calculationResult.myProfitPerKm > 0 ? '#4ecca3' : '#ee6c4d', fontWeight: 'bold' }}>
+                                <div className="calc-comparison-row" style={{ marginTop: '8px' }}>
+                                    <span className="calc-comparison-label">Per km:</span>
+                                    <span className={calculationResult.myProfitPerKm > 0 ? 'calc-profit-positive' : 'calc-profit-negative'}>
                                         Rs. {calculationResult.myProfitPerKm.toFixed(2)}/km
                                     </span>
                                 </div>
 
-                                <div style={{
-                                    marginTop: '12px',
-                                    paddingTop: '12px',
-                                    borderTop: '1px solid rgba(102, 126, 234, 0.3)'
-                                }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', marginBottom: '5px' }}>
-                                        <span style={{ color: '#93dac4' }}>Extra Earning:</span>
-                                        <span style={{ color: calculationResult.priceDifference > 0 ? '#4ecca3' : '#ee6c4d', fontWeight: 'bold' }}>
+                                <div className="calc-divider">
+                                    <div className="calc-extra-earning">
+                                        <span className="calc-comparison-label">Extra Earning:</span>
+                                        <span className={`calc-comparison-value ${calculationResult.priceDifference > 0 ? 'calc-profit-positive' : 'calc-profit-negative'}`}>
                                             {calculationResult.priceDifference > 0 ? '+' : ''}Rs. {calculationResult.priceDifference.toFixed(2)}
                                         </span>
                                     </div>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px' }}>
-                                        <span style={{ color: '#93dac4' }}>Extra Profit:</span>
-                                        <span style={{ color: calculationResult.profitDifference > 0 ? '#4ecca3' : '#ee6c4d', fontWeight: 'bold' }}>
+                                    <div className="calc-extra-earning">
+                                        <span className="calc-comparison-label">Extra Profit:</span>
+                                        <span className={`calc-comparison-value ${calculationResult.profitDifference > 0 ? 'calc-profit-positive' : 'calc-profit-negative'}`}>
                                             {calculationResult.profitDifference > 0 ? '+' : ''}Rs. {calculationResult.profitDifference.toFixed(2)}
                                         </span>
                                     </div>
@@ -1624,20 +1920,18 @@ function App() {
                             </div>
                         )}
 
-                        {/* Recommendation */}
-                        <div style={{
-                            padding: '12px',
-                            background: calculationResult.offerProfitPerKm >= 10 ? 'rgba(78, 204, 163, 0.1)' : 'rgba(238, 108, 77, 0.1)',
-                            border: `1px solid ${calculationResult.offerProfitPerKm >= 10 ? '#4ecca3' : '#ee6c4d'}`,
-                            borderRadius: '8px',
-                            textAlign: 'center',
-                            fontSize: '14px',
-                            fontWeight: 'bold',
-                            color: calculationResult.offerProfitPerKm >= 10 ? '#4ecca3' : '#f4a261'
-                        }}>
-                            {calculationResult.offerProfitPerKm >= 10
-                                ? '✅ Good deal! Customer offer is profitable.'
-                                : '⚠️ Low profit! Consider negotiating higher.'}
+                        <div className={`calc-recommendation ${calculationResult.offerProfitPerKm >= 10 ? 'good' : 'bad'}`}>
+                            {calculationResult.offerProfitPerKm >= 10 ? (
+                                <>
+                                    <span className="calc-checkmark">✅</span>
+                                    Good deal! Customer offer is profitable.
+                                </>
+                            ) : (
+                                <>
+                                    <span className="calc-warning">⚠️</span>
+                                    Low profit! Consider negotiating higher.
+                                </>
+                            )}
                         </div>
                     </div>
                 )}
@@ -1646,10 +1940,52 @@ function App() {
     };
 
     const renderHistory = () => {
+        const rollingAvg = calculateRollingAverage(petrolEntries);
+        const allTimeAvg = MILEAGE_CONFIG.ENABLE_ALL_TIME_AVG
+            ? calculateAllTimeAverage(petrolEntries)
+            : null;
+
         return (
             <div>
                 <div className="card">
                     <h2>📜 Fuel History</h2>
+
+                    {petrolEntries.length >= 2 && (
+                        <div style={{
+                            background: '#0f3460',
+                            padding: '12px',
+                            borderRadius: '10px',
+                            marginBottom: '15px',
+                            border: '1px solid #1a4d6d'
+                        }}>
+                            <div style={{
+                                display: 'grid',
+                                gridTemplateColumns: allTimeAvg ? 'repeat(2, 1fr)' : '1fr',
+                                gap: '10px',
+                                fontSize: '13px'
+                            }}>
+                                <div>
+                                    <div style={{ color: '#93dac4', marginBottom: '5px' }}>
+                                        5-Fill Average
+                                    </div>
+                                    <div style={{ color: '#4ecca3', fontSize: '20px', fontWeight: 'bold' }}>
+                                        {rollingAvg.toFixed(2)} km/L
+                                    </div>
+                                </div>
+                                {allTimeAvg && (
+                                    <div>
+                                        <div style={{ color: '#93dac4', marginBottom: '5px' }}>
+                                            All-Time Average
+                                        </div>
+                                        <div style={{ color: '#4ecca3', fontSize: '20px', fontWeight: 'bold' }}>
+                                            {allTimeAvg.toFixed(2)} km/L
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
                     {petrolEntries.length === 0 ? (
                         <div className="empty-state">
                             <div className="empty-state-icon">📋</div>
@@ -1669,6 +2005,9 @@ function App() {
                                             <div className="history-date">{formattedDate}</div>
                                             <div className="history-mileage">
                                                 {entry.mileage > 0 ? entry.mileage : 'N/A'} km/L
+                                                {entry.isEstimated && (
+                                                    <span className="estimation-badge">EST</span>
+                                                )}
                                             </div>
                                         </div>
                                         <div className="history-details">
@@ -1680,6 +2019,15 @@ function App() {
                                             </div>
                                             <div className="history-detail">
                                                 Dist: <span>{entry.kmTraveled.toFixed(1)} km</span>
+                                                {entry.kmTraveled < MILEAGE_CONFIG.MIN_DISTANCE_THRESHOLD && entry.kmTraveled > 0 && (
+                                                    <span style={{
+                                                        fontSize: '10px',
+                                                        color: '#f4a261',
+                                                        marginLeft: '4px'
+                                                    }}>
+                                                        ⚠️
+                                                    </span>
+                                                )}
                                             </div>
                                         </div>
                                     </div>
@@ -1692,26 +2040,19 @@ function App() {
         );
     };
 
+    // ==========================================
+    // MAIN RENDER
+    // ==========================================
+
     return (
         <div className="App">
             {showRideCompletionDialog && (
                 <div className="modal-overlay">
-                    <div className="modal">
+                    <div className="modal ride-modal">
                         <h2>🚖 Complete Ride</h2>
-                        <div style={{
-                            background: 'rgba(78, 204, 163, 0.1)',
-                            border: '2px solid #4ecca3',
-                            borderRadius: '10px',
-                            padding: '15px',
-                            marginBottom: '20px',
-                            textAlign: 'center'
-                        }}>
-                            <div style={{ color: '#93dac4', fontSize: '13px', marginBottom: '5px' }}>
-                                Distance Covered
-                            </div>
-                            <div style={{ color: '#4ecca3', fontSize: '32px', fontWeight: 'bold' }}>
-                                {completedRideKm.toFixed(2)} km
-                            </div>
+                        <div className="ride-completion-distance">
+                            <div className="ride-completion-label">Distance Covered</div>
+                            <div className="ride-completion-value">{completedRideKm.toFixed(2)} km</div>
                         </div>
                         <p style={{ color: '#93dac4', fontSize: '14px', marginBottom: '15px', textAlign: 'center' }}>
                             Enter your ride earnings
@@ -1724,7 +2065,7 @@ function App() {
                                 inputMode="decimal" autoFocus
                                 style={{ fontSize: '18px', padding: '15px', textAlign: 'center' }} />
                         </div>
-                        <div className="input-group">
+                        <div className="input-group tip-input-wrapper">
                             <label htmlFor="rideTip">Tip (Optional) 🎁</label>
                             <input type="number" id="rideTip" placeholder="e.g., 50"
                                 step="1" min="0" value={rideTip}
@@ -1733,15 +2074,7 @@ function App() {
                                 style={{ fontSize: '18px', padding: '15px', textAlign: 'center' }} />
                         </div>
                         {petrolEntries.length === 0 && (
-                            <div style={{
-                                background: 'rgba(238, 108, 77, 0.1)',
-                                border: '1px solid #ee6c4d',
-                                borderRadius: '8px',
-                                padding: '12px',
-                                marginTop: '15px',
-                                fontSize: '13px',
-                                color: '#f4a261'
-                            }}>
+                            <div className="modal-warning">
                                 ⚠️ Add a fuel entry first for accurate profit calculation
                             </div>
                         )}
@@ -1759,7 +2092,7 @@ function App() {
 
             {showRideEntry && (
                 <div className="modal-overlay">
-                    <div className="modal">
+                    <div className="modal ride-modal">
                         <h2>🚖 Add Ride Manually</h2>
                         <p style={{ color: '#93dac4', fontSize: '14px', marginBottom: '15px' }}>
                             Manual entry (without GPS tracking)
@@ -1780,7 +2113,7 @@ function App() {
                                 inputMode="decimal"
                                 style={{ fontSize: '18px', padding: '15px', textAlign: 'center' }} />
                         </div>
-                        <div className="input-group">
+                        <div className="input-group tip-input-wrapper">
                             <label htmlFor="rideTip">Tip (Optional) 🎁</label>
                             <input type="number" id="rideTip" placeholder="e.g., 50"
                                 step="1" min="0" value={rideTip}
@@ -1789,15 +2122,7 @@ function App() {
                                 style={{ fontSize: '18px', padding: '15px', textAlign: 'center' }} />
                         </div>
                         {petrolEntries.length === 0 && (
-                            <div style={{
-                                background: 'rgba(238, 108, 77, 0.1)',
-                                border: '1px solid #ee6c4d',
-                                borderRadius: '8px',
-                                padding: '12px',
-                                marginTop: '15px',
-                                fontSize: '13px',
-                                color: '#f4a261'
-                            }}>
+                            <div className="modal-warning">
                                 ⚠️ Add a fuel entry first for accurate profit calculation
                             </div>
                         )}
@@ -1874,7 +2199,7 @@ function App() {
                 {activeScreen === 'history' && renderHistory()}
             </div>
 
-            <div className="bottom-nav" style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)' }}>
+            <div className="bottom-nav">
                 <button className={`nav-btn ${activeScreen === 'dashboard' ? 'active' : ''}`}
                     onClick={() => setActiveScreen('dashboard')}>
                     <div className="nav-icon">🏠</div>

@@ -1,3 +1,481 @@
+/* Add these NEW styles to your existing App.css */
+
+/* ==========================================
+   MILEAGE TREND & ESTIMATION STYLES
+   ========================================== */
+
+/* Mileage trend indicator */
+.mileage-trend {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 13px;
+    padding: 6px 12px;
+    border-radius: 12px;
+    font-weight: 500;
+    margin-top: 8px;
+    justify-content: center;
+}
+
+    .mileage-trend.positive {
+        background: rgba(78, 204, 163, 0.15);
+        color: #4ecca3;
+    }
+
+    .mileage-trend.negative {
+        background: rgba(238, 108, 77, 0.15);
+        color: #ee6c4d;
+    }
+
+/* Estimation badge */
+.estimation-badge {
+    display: inline-block;
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: rgba(244, 162, 97, 0.2);
+    color: #f4a261;
+    border: 1px solid #f4a261;
+    font-weight: bold;
+    margin-left: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Rolling average panel */
+.rolling-avg-panel {
+    margin-top: 15px;
+    padding: 12px;
+    background: rgba(26, 77, 109, 0.3);
+    border-radius: 10px;
+    border: 1px solid #1a4d6d;
+    animation: slideIn 0.3s ease-out;
+}
+
+/* ==========================================
+   CALCULATOR ENHANCEMENTS
+   ========================================== */
+
+.calc-result-section {
+    background: linear-gradient(135deg, #1a4d6d 0%, #0f3460 100%);
+    border: 2px solid #4ecca3;
+    border-radius: 12px;
+    padding: 15px;
+    margin-top: 15px;
+    animation: slideIn 0.3s ease-out;
+}
+
+.calc-section-header {
+    text-align: center;
+    color: #4ecca3;
+    font-size: 14px;
+    margin-bottom: 12px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.calc-fuel-box {
+    background: rgba(238, 108, 77, 0.1);
+    padding: 10px;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    border: 1px solid #ee6c4d;
+}
+
+.calc-offer-box {
+    background: rgba(78, 204, 163, 0.1);
+    padding: 10px;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    border: 1px solid #4ecca3;
+}
+
+.calc-counter-box {
+    background: rgba(102, 126, 234, 0.15);
+    padding: 10px;
+    border-radius: 8px;
+    border: 2px solid #667eea;
+    animation: counterGlow 2s infinite;
+}
+
+@keyframes counterGlow {
+    0%, 100% {
+        box-shadow: 0 0 5px rgba(102, 126, 234, 0.3);
+    }
+
+    50% {
+        box-shadow: 0 0 15px rgba(102, 126, 234, 0.6);
+    }
+}
+
+.calc-profit-positive {
+    color: #4ecca3 !important;
+    font-weight: bold;
+}
+
+.calc-profit-negative {
+    color: #ee6c4d !important;
+    font-weight: bold;
+}
+
+.calc-recommendation {
+    margin-top: 12px;
+    padding: 10px;
+    border-radius: 8px;
+    text-align: center;
+    font-size: 13px;
+    font-weight: 500;
+    animation: fadeIn 0.5s ease-out;
+}
+
+    .calc-recommendation.good {
+        background: rgba(78, 204, 163, 0.1);
+        border: 1px solid #4ecca3;
+        color: #4ecca3;
+    }
+
+    .calc-recommendation.bad {
+        background: rgba(238, 108, 77, 0.1);
+        border: 1px solid #ee6c4d;
+        color: #f4a261;
+    }
+
+.calc-comparison-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 13px;
+    padding: 5px 0;
+}
+
+.calc-comparison-label {
+    color: #93dac4;
+}
+
+.calc-comparison-value {
+    color: #e8e8e8;
+    font-weight: bold;
+}
+
+.calc-profit-large {
+    font-size: 18px !important;
+    margin-top: 8px;
+}
+
+.calc-divider {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(102, 126, 234, 0.3);
+}
+
+.calc-checkmark {
+    display: inline-block;
+    font-size: 18px;
+    color: #4ecca3;
+    margin-right: 5px;
+}
+
+.calc-warning {
+    display: inline-block;
+    font-size: 18px;
+    color: #ee6c4d;
+    margin-right: 5px;
+}
+
+.btn-calculator {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%) !important;
+    color: white !important;
+    box-shadow: 0 4px 15px rgba(240, 147, 251, 0.3);
+}
+
+    .btn-calculator:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(240, 147, 251, 0.5);
+    }
+
+/* ==========================================
+   TRIP BUTTON ENHANCEMENTS
+   ========================================== */
+
+.btn-ride-trip {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    position: relative;
+    overflow: hidden;
+}
+
+    .btn-ride-trip::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+        transition: left 0.5s;
+    }
+
+    .btn-ride-trip:hover::before {
+        left: 100%;
+    }
+
+.btn-personal-trip {
+    background: linear-gradient(135deg, #4ecca3 0%, #3baf84 100%);
+}
+
+.btn-subtitle {
+    font-size: 12px;
+    margin-top: 5px;
+    opacity: 0.9;
+    font-weight: normal;
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+.trip-type-badge {
+    animation: badgePulse 2s infinite;
+}
+
+@keyframes badgePulse {
+    0%, 100% {
+        box-shadow: 0 0 10px rgba(102, 126, 234, 0.3);
+    }
+
+    50% {
+        box-shadow: 0 0 20px rgba(102, 126, 234, 0.6);
+    }
+}
+
+/* ==========================================
+   MODAL ENHANCEMENTS
+   ========================================== */
+
+.modal-warning {
+    background: rgba(238, 108, 77, 0.1);
+    border: 1px solid #ee6c4d;
+    border-radius: 8px;
+    padding: 12px;
+    margin-top: 15px;
+    font-size: 13px;
+    color: #f4a261;
+    line-height: 1.5;
+}
+
+.modal-info {
+    background: rgba(78, 204, 163, 0.1);
+    border: 1px solid #4ecca3;
+    border-radius: 8px;
+    padding: 12px;
+    margin-top: 15px;
+    font-size: 13px;
+    color: #93dac4;
+    line-height: 1.5;
+}
+
+.ride-completion-distance {
+    background: rgba(78, 204, 163, 0.1);
+    border: 2px solid #4ecca3;
+    border-radius: 10px;
+    padding: 15px;
+    margin-bottom: 20px;
+    text-align: center;
+    animation: fadeIn 0.5s ease-out;
+}
+
+.ride-completion-label {
+    color: #93dac4;
+    font-size: 13px;
+    margin-bottom: 5px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.ride-completion-value {
+    color: #4ecca3;
+    font-size: 32px;
+    font-weight: bold;
+    text-shadow: 0 0 10px rgba(78, 204, 163, 0.3);
+}
+
+.tip-input-wrapper {
+    position: relative;
+}
+
+    .tip-input-wrapper::before {
+        content: '🎁';
+        position: absolute;
+        left: 15px;
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: 20px;
+        pointer-events: none;
+        z-index: 1;
+    }
+
+    .tip-input-wrapper input {
+        padding-left: 45px !important;
+    }
+
+.ride-modal {
+    border: 2px solid #667eea !important;
+}
+
+/* ==========================================
+   RIDE SUMMARY ENHANCEMENTS
+   ========================================== */
+
+.ride-summary-card {
+    background: linear-gradient(135deg, #1a2332 0%, #16213e 100%);
+    border: 2px solid #667eea !important;
+    position: relative;
+    overflow: hidden;
+}
+
+    .ride-summary-card::before {
+        content: '';
+        position: absolute;
+        top: -2px;
+        left: -2px;
+        right: -2px;
+        bottom: -2px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        opacity: 0.1;
+        border-radius: 15px;
+        z-index: 0;
+    }
+
+    .ride-summary-card > * {
+        position: relative;
+        z-index: 1;
+    }
+
+.profit-box {
+    animation: profitGlow 3s infinite;
+}
+
+@keyframes profitGlow {
+    0%, 100% {
+        box-shadow: 0 0 5px rgba(78, 204, 163, 0.3);
+    }
+
+    50% {
+        box-shadow: 0 0 20px rgba(78, 204, 163, 0.6);
+    }
+}
+
+.tip-badge {
+    display: inline-block;
+    background: linear-gradient(135deg, #f4a261 0%, #e76f51 100%);
+    color: white;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: bold;
+    margin-left: 5px;
+    animation: tipShine 2s infinite;
+}
+
+@keyframes tipShine {
+    0%, 100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.8;
+    }
+}
+
+/* ==========================================
+   RESPONSIVE ADJUSTMENTS
+   ========================================== */
+
+@media (max-width: 480px) {
+    .calc-comparison-row {
+        font-size: 12px;
+    }
+
+    .calc-profit-large {
+        font-size: 16px !important;
+    }
+
+    .calc-section-header {
+        font-size: 13px;
+    }
+
+    .ride-completion-value {
+        font-size: 28px;
+    }
+
+    .estimation-badge {
+        font-size: 9px;
+        padding: 2px 5px;
+    }
+
+    .mileage-trend {
+        font-size: 11px;
+        padding: 4px 8px;
+    }
+}
+
+@media (max-height: 600px) and (orientation: landscape) {
+    .calc-result-section {
+        max-height: 50vh;
+        overflow-y: auto;
+        scrollbar-width: thin;
+    }
+
+        .calc-result-section::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .calc-result-section::-webkit-scrollbar-thumb {
+            background: #4ecca3;
+            border-radius: 2px;
+        }
+
+    .ride-completion-distance {
+        padding: 10px;
+        margin-bottom: 10px;
+    }
+
+    .ride-completion-value {
+        font-size: 24px;
+    }
+}
+
+/* ==========================================
+   ACCESSIBILITY
+   ========================================== */
+
+@media (prefers-reduced-motion: reduce) {
+    .trip-type-badge,
+    .tip-badge,
+    .btn-ride-trip::before,
+    .calc-counter-box,
+    .profit-box {
+        animation: none !important;
+    }
+}
+
+@media (prefers-contrast: high) {
+    .calc-fuel-box,
+    .calc-offer-box,
+    .calc-counter-box {
+        border-width: 3px;
+    }
+
+    .calc-profit-positive,
+    .calc-profit-negative {
+        text-decoration: underline;
+    }
+
+    .estimation-badge {
+        border-width: 2px;
+    }
+}
+
+/* Keep ALL your existing CSS and just ADD the above styles */
+
+
 .App {
     min-height: 100vh;
     padding-bottom: 80px;

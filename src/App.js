@@ -1341,7 +1341,7 @@ function App() {
         const hasLowDistance = totalKmSinceLastFill > 0 && totalKmSinceLastFill < 100;
         const litrePercent = Math.min(((parseFloat(litres) || 0) / 60) * 100, 100);
         const litreGaugeDashoffset = 100 - litrePercent;
-        const latestPriceVal = petrolEntries.length > 0 ? petrolEntries[0].pricePerLitre : 272;
+
         const activeMileageForRange = getEffectiveMileage(petrolEntries).mileage || 45;
         const lastLitresForRange = petrolEntries.length > 0 ? petrolEntries[0].litres : 10;
         const estimatedRange = lastLitresForRange * activeMileageForRange;

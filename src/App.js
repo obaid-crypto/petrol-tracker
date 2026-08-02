@@ -1473,9 +1473,6 @@ function App() {
             ? (petrolEntries[0].litres * petrolEntries[0].pricePerLitre)
             : 0;
 
-        const totalRefuelsKm = petrolEntries.reduce((sum, item) => sum + (parseFloat(item.kmTraveled) || 0), 0);
-        const odometerAtTripStart = 12450 + totalRefuelsKm + totalKmSinceLastFill - distanceVal;
-        const liveOdometer = odometerAtTripStart + distanceVal;
 
         const latestPrice = petrolEntries.length > 0 ? petrolEntries[0].pricePerLitre : 272; 
         const activeMileage = effectiveMileageData.mileage > 0 ? effectiveMileageData.mileage : 45; 
@@ -1708,10 +1705,6 @@ function App() {
         // Speedometer parameters mapping
         const roundedSpeed = Math.round(smoothSpeed);
 
-        // Odometer live mapping
-        const totalRefuelsKm = petrolEntries.reduce((sum, item) => sum + (parseFloat(item.kmTraveled) || 0), 0);
-        const odometerAtTripStart = 12450 + totalRefuelsKm + totalKmSinceLastFill - distanceVal;
-        const liveOdometer = odometerAtTripStart + distanceVal;
 
         const isRideActive = isTracking && currentTrip && currentTrip.isRide;
 

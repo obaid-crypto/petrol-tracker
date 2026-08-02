@@ -1567,7 +1567,7 @@ function App() {
                                     <div className="flex flex-col gap-1">
                                         <span className="font-label-caps text-label-caps text-on-surface-variant uppercase font-bold">TOTAL</span>
                                         <div className="flex items-baseline gap-1">
-                                            <span className="font-stats-numeral text-headline-md text-on-background font-bold">{liveOdometer.toFixed(2)}</span>
+                                            <span className="font-stats-numeral text-headline-md text-on-background font-bold">{totalKmSinceLastFill.toFixed(2)}</span>
                                             <span className="font-label-caps text-[10px] text-on-surface-variant font-bold">KM</span>
                                         </div>
                                     </div>
@@ -1782,7 +1782,7 @@ function App() {
                                 <div className="glass-card rounded-xl p-4 border border-secondary/20">
                                     <p className="font-label-caps text-on-surface-variant text-[11px] uppercase mb-1 font-bold">Total Trip</p>
                                     <div className="flex items-baseline gap-1">
-                                        <span className="font-stats-numeral text-white text-[24px] font-bold">{liveOdometer.toFixed(1)}</span>
+                                        <span className="font-stats-numeral text-white text-[24px] font-bold">{totalKmSinceLastFill.toFixed(1)}</span>
                                         <span className="text-on-surface-variant text-[12px] font-bold">km</span>
                                     </div>
                                 </div>

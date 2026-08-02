@@ -1339,6 +1339,14 @@ function App() {
     const renderPetrolEntry = () => {
         const estTotal = (parseFloat(litres) || 0) * (parseFloat(pricePerLitre) || 0);
         const hasLowDistance = totalKmSinceLastFill > 0 && totalKmSinceLastFill < 100;
+        const litrePercent = Math.min(((parseFloat(litres) || 0) / 60) * 100, 100);
+        const litreGaugeDashoffset = 100 - litrePercent;
+        const latestPriceVal = petrolEntries.length > 0 ? petrolEntries[0].pricePerLitre : 272;
+        const activeMileageForRange = getEffectiveMileage(petrolEntries).mileage || 45;
+        const lastLitresForRange = petrolEntries.length > 0 ? petrolEntries[0].litres : 10;
+        const estimatedRange = lastLitresForRange * activeMileageForRange;
+        const kmRemaining = Math.max(0, estimatedRange - totalKmSinceLastFill);
+        const isRangeCritical = kmRemaining < 50 && kmRemaining >= 0;
 
         return (
             <div className="w-full">
@@ -1349,7 +1357,7 @@ function App() {
                 </div>
 
                 {/* TopAppBar */}
-                <header className="w-full top-0 pt-6 flex justify-between items-center z-50 max-w-lg mx-auto">
+                <header className="w-full top-0 pt-6 flex justify-between items-center z-50 max-w-lg mx-auto px-container-padding">
                     <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full overflow-hidden border border-white/10">
                             <img 
@@ -1358,7 +1366,7 @@ function App() {
                                 src="https://lh3.googleusercontent.com/aida-public/AB6AXuBLOQKXHtXXExrSkQRimHNBihV-jjRsTc47yKNxbtoPRCF6E4Zk1HkYcWUyJMIlaAon9MUVDIl0KBViE2uMUQ4XRbtJzvGQhSCVYqv-1MdWKxtrTJGEF6Ib42qwD4C37FX0-tA50HK5Q5uLhdSblTwNeCY5zlOPFRq9nPSr7NGAJFTPDnTfuDpCrj9OARH-_xgo6VM_tSCMQKUKt24X6eOvWtpvXU7PGFlg3T_kfPie631vWJ9PX2YHmg" 
                             />
                         </div>
-                        <h1 className="font-headline-lg text-headline-lg font-extrabold text-primary tracking-tight" onClick={() => setActiveScreen('dashboard')} style={{ cursor: 'pointer' }}>Fuel & Ride</h1>
+                        <h1 className="font-headline-lg text-headline-lg font-extrabold text-primary tracking-tight" onClick={() => setActiveScreen('dashboard')} style={{ cursor: 'pointer' }}>Fuel &amp; Ride</h1>
                     </div>
                     <button 
                         className="text-primary hover:opacity-80 transition-opacity duration-300 active:scale-95 transition-transform"
@@ -1368,91 +1376,175 @@ function App() {
                     </button>
                 </header>
 
-                <main className="pb-32 pt-8 max-w-lg mx-auto">
+                <main className="pb-32 pt-6 max-w-lg mx-auto space-y-5 px-container-padding">
+
                     {/* Page Header */}
-                    <div className="flex items-center gap-3 mb-8">
-                        <span className="material-symbols-outlined text-primary text-3xl glow-accent" style={{ fontVariationSettings: "'FILL' 1" }}>local_gas_station</span>
-                        <h2 className="font-headline-md text-headline-md text-on-surface font-bold">Add Petrol</h2>
+                    <div className="flex justify-between items-center animate-zoom-in-fade">
+                        <div className="flex flex-col">
+                            <h2 className="font-headline-md text-headline-md text-on-surface font-bold tracking-tight">Add Petrol</h2>
+                            <p className="text-[11px] text-on-surface-variant font-medium mt-0.5">Fuel &amp; Ride Tracker</p>
+                        </div>
+                        <div className="relative w-12 h-12 glass-card rounded-full flex items-center justify-center overflow-hidden">
+                            <span className="material-symbols-outlined text-primary z-10" style={{ fontVariationSettings: "'FILL' 1" }}>local_gas_station</span>
+                            <div 
+                                className="absolute bottom-0 left-0 w-full bg-primary/40 transition-all duration-500 rounded-b-full"
+                                style={{ height: `${Math.min(100, (parseFloat(litres)||0)/60*100 * 0.4 + (parseFloat(pricePerLitre)||0)/300*100 * 0.4)}%` }}
+                            ></div>
+                        </div>
+                    </div>
+
+                    {/* Odometer Hero Card */}
+                    <div className="glass-card rounded-2xl p-6 flex flex-col items-center justify-center text-center relative overflow-hidden animate-zoom-in-fade" style={{ border: '1px solid rgba(45,232,168,0.2)', boxShadow: '0 0 20px rgba(45,232,168,0.08)' }}>
+                        {/* Scanlines overlay */}
+                        <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'linear-gradient(rgba(18,16,16,0) 50%,rgba(0,0,0,0.25) 50%),linear-gradient(90deg,rgba(255,0,0,0.06),rgba(0,255,0,0.02),rgba(0,0,255,0.06))', backgroundSize: '100% 4px,3px 100%' }}></div>
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-primary mb-2">Estimated Total</span>
+                        <div className="flex items-baseline gap-2">
+                            <span className="text-2xl text-on-surface font-bold opacity-50 font-mono">PKR</span>
+                            <span className="font-mono text-5xl font-extrabold text-on-surface tracking-tight" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                                {estTotal.toFixed(2).padStart(6, '0')}
+                            </span>
+                        </div>
+                        <div className="mt-3 flex gap-2">
+                            <span className="px-2 py-1 rounded text-[10px] font-bold tracking-tight border" style={{ background: 'rgba(45,232,168,0.1)', color: '#56f1c2', borderColor: 'rgba(45,232,168,0.2)' }}>PREMIUM 98</span>
+                            <span className="px-2 py-1 rounded text-[10px] font-bold tracking-tight border border-outline/30 text-on-surface-variant bg-surface-container">ECONOMY MODE</span>
+                        </div>
+                    </div>
+
+                    {/* Range / Low Distance Alert */}
+                    {(isRangeCritical || hasLowDistance) && (
+                        <div className="glass-card rounded-xl flex items-center p-4 border-l-4 border-l-secondary animate-zoom-in-fade" style={{ boxShadow: '0 4px 20px rgba(0,0,0,0.3)' }}>
+                            <div className="w-2 h-2 rounded-full bg-secondary mr-3 flex-shrink-0 animate-pulse-record"></div>
+                            <span className="material-symbols-outlined text-secondary mr-3 flex-shrink-0">route</span>
+                            <div className="flex flex-col">
+                                <span className="text-[13px] font-bold text-on-surface">Range Critical</span>
+                                <span className="text-[11px] text-on-surface-variant">
+                                    {isRangeCritical
+                                        ? `Estimated ${kmRemaining.toFixed(0)} km remaining. Find nearest station.`
+                                        : `Low distance since last fill: ${totalKmSinceLastFill.toFixed(1)} km`}
+                                </span>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Trip Since Last Refuel Info */}
+                    <div className={`glass-card rounded-2xl p-4 border-l-4 ${hasLowDistance ? 'border-l-tertiary' : 'border-l-primary'} flex items-center gap-4 animate-pulse-subtle`}>
+                        <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                            <span className="material-symbols-outlined text-primary text-[18px]">distance</span>
+                        </div>
+                        <div>
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-0.5">
+                                {hasLowDistance ? "Low Distance Since Last Refuel" : "Trip Since Last Refuel"}
+                            </p>
+                            <p className="text-[14px] font-semibold text-on-surface">
+                                Distance: <span className="text-primary font-extrabold">{totalKmSinceLastFill.toFixed(1)} km</span>
+                            </p>
+                        </div>
                     </div>
 
                     {/* Form Section */}
-                    <form className="space-y-element-gap" onSubmit={(e) => e.preventDefault()}>
-                        {/* Litres Filled */}
-                        <div className="space-y-2">
-                            <label className="font-label-caps text-label-caps text-on-surface-variant px-1 block">LITRES FILLED</label>
-                            <div className="relative group">
-                                <input 
-                                    className="glass-input w-full h-16 px-6 rounded-xl font-stats-numeral text-stats-numeral text-on-surface placeholder:text-outline/50 pr-12 focus:ring-0 focus:outline-none" 
-                                    placeholder="0.00" 
-                                    step="0.01" 
+                    <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
+
+                        {/* Litres Input with Gauge */}
+                        <div className="glass-card rounded-xl p-4 flex items-center justify-between transition-all duration-300 hover:bg-white/5 input-glow">
+                            <div className="flex flex-col flex-1">
+                                <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1">Volume (Litres)</label>
+                                <input
+                                    className="bg-transparent border-none text-3xl font-mono font-bold text-on-surface focus:ring-0 focus:outline-none w-full placeholder:text-outline/40"
+                                    placeholder="0.00"
+                                    step="0.01"
                                     type="number"
                                     value={litres}
                                     onChange={(e) => setLitres(e.target.value)}
+                                    style={{ WebkitAppearance: 'none', MozAppearance: 'textfield' }}
                                 />
-                                <div className="absolute right-6 top-1/2 -translate-y-1/2 text-on-surface-variant font-body-md">L</div>
+                            </div>
+                            {/* Circular SVG Gauge */}
+                            <div className="relative w-14 h-14 ml-4 flex-shrink-0">
+                                <svg className="w-full h-full" viewBox="0 0 36 36" style={{ transform: 'rotate(-90deg)' }}>
+                                    <circle fill="none" stroke="#2d3449" strokeWidth="4" cx="18" cy="18" r="15.915" />
+                                    <circle
+                                        fill="none"
+                                        stroke="#56f1c2"
+                                        strokeWidth="4"
+                                        cx="18" cy="18" r="15.915"
+                                        strokeDasharray="100"
+                                        strokeDashoffset={litreGaugeDashoffset}
+                                        strokeLinecap="round"
+                                        style={{ transition: 'stroke-dashoffset 0.6s ease-out' }}
+                                    />
+                                </svg>
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                    <span className="material-symbols-outlined text-on-surface-variant" style={{ fontSize: '18px' }}>water_drop</span>
+                                </div>
                             </div>
                         </div>
 
-                        {/* Price Per Litre */}
-                        <div className="space-y-2">
-                            <label className="font-label-caps text-label-caps text-on-surface-variant px-1 block">PRICE PER LITRE (PKR)</label>
-                            <div className="relative group">
-                                <input 
-                                    className="glass-input w-full h-16 px-6 rounded-xl font-stats-numeral text-stats-numeral text-on-surface placeholder:text-outline/50 pr-16 focus:ring-0 focus:outline-none" 
-                                    placeholder="0.00" 
-                                    step="0.01" 
+                        {/* Price Per Litre Input */}
+                        <div className="glass-card rounded-xl p-4 flex items-center justify-between transition-all duration-300 hover:bg-white/5 input-glow">
+                            <div className="flex flex-col flex-1">
+                                <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1">Price per Litre (PKR)</label>
+                                <input
+                                    className="bg-transparent border-none text-3xl font-mono font-bold text-on-surface focus:ring-0 focus:outline-none w-full placeholder:text-outline/40"
+                                    placeholder="0.00"
+                                    step="0.01"
                                     type="number"
                                     value={pricePerLitre}
                                     onChange={(e) => setPricePerLitre(e.target.value)}
+                                    style={{ WebkitAppearance: 'none', MozAppearance: 'textfield' }}
                                 />
-                                <div className="absolute right-6 top-1/2 -translate-y-1/2 text-on-surface-variant font-body-md font-semibold">PKR</div>
                             </div>
+                            <span className="ml-4 font-mono text-sm font-bold tracking-widest text-primary">PKR</span>
                         </div>
 
-                        {/* Date Picker */}
-                        <div className="space-y-2">
-                            <label className="font-label-caps text-label-caps text-on-surface-variant px-1 block">DATE</label>
-                            <div className="relative group">
-                                <input 
-                                    className="glass-input w-full h-16 px-6 rounded-xl font-body-lg text-body-lg text-on-surface appearance-none focus:ring-0 focus:outline-none" 
+                        {/* Date Input */}
+                        <div className="glass-card rounded-xl p-4 flex items-center justify-between transition-all duration-300 hover:bg-white/5 input-glow">
+                            <div className="flex flex-col flex-1">
+                                <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1">Date</label>
+                                <input
+                                    className="bg-transparent border-none text-xl font-semibold text-on-surface focus:ring-0 focus:outline-none w-full appearance-none"
                                     type="date"
                                     value={fillDate}
                                     onChange={(e) => setFillDate(e.target.value)}
                                 />
-                                <span className="material-symbols-outlined absolute right-6 top-1/2 -translate-y-1/2 text-primary pointer-events-none">calendar_today</span>
                             </div>
+                            <span className="material-symbols-outlined text-on-surface-variant ml-4">calendar_today</span>
                         </div>
 
-                        {/* Distance Alert Card */}
-                        <div className={`glass-card rounded-2xl p-5 mt-8 border-l-4 ${hasLowDistance ? 'border-l-tertiary bg-tertiary/5' : 'border-l-primary'} flex items-center gap-4 animate-pulse-subtle`}>
-                            <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-                                <span className="material-symbols-outlined text-primary">distance</span>
-                            </div>
-                            <div>
-                                <p className="font-label-caps text-label-caps text-on-surface-variant mb-0.5 uppercase">
-                                    {hasLowDistance ? "LOW DISTANCE SINCE LAST REFUEL" : "TRIP SINCE LAST REFUEL"}
-                                </p>
-                                <p className="font-stats-numeral text-stats-numeral text-on-surface">
-                                    Distance: <span className="text-primary font-extrabold">{totalKmSinceLastFill.toFixed(1)} km</span>
-                                </p>
-                            </div>
-                        </div>
-
-                        {/* Estimated Total */}
-                        <div className="pt-4 flex justify-between items-center border-t border-white/5 mt-4">
-                            <span className="font-label-caps text-label-caps text-on-surface-variant">ESTIMATED TOTAL</span>
-                            <span className="font-stats-numeral text-stats-numeral text-primary font-bold">PKR {estTotal.toFixed(2)}</span>
-                        </div>
-
-                        {/* Save Button Area */}
-                        <div className="pt-6 pb-20">
-                            <button 
-                                className="fuel-gradient-btn w-full h-16 rounded-2xl flex items-center justify-center gap-3 active:scale-[0.98] transition-transform duration-150 cursor-pointer"
-                                onClick={savePetrolEntry}
+                        {/* Save Button with confetti */}
+                        <div className="pt-4 pb-6">
+                            <button
+                                id="petrol-save-btn"
+                                className="w-full py-5 rounded-full flex items-center justify-center gap-3 font-bold text-lg active:scale-95 transition-all duration-200 overflow-hidden relative group cursor-pointer"
+                                style={{
+                                    backgroundImage: 'linear-gradient(90deg, #2DE8A8, #1FB382, #2DE8A8)',
+                                    color: '#003829',
+                                    boxShadow: '0 0 25px rgba(45,212,167,0.35)',
+                                }}
+                                onClick={() => {
+                                    savePetrolEntry();
+                                    const btn = document.getElementById('petrol-save-btn');
+                                    if (!btn) return;
+                                    const rect = btn.getBoundingClientRect();
+                                    const container = document.getElementById('petrol-confetti');
+                                    if (!container) return;
+                                    for (let i = 0; i < 40; i++) {
+                                        const piece = document.createElement('div');
+                                        piece.style.cssText = `position:fixed;width:8px;height:8px;border-radius:2px;background:${i%2===0?'#56f1c2':'#ffc640'};left:${rect.left+rect.width/2}px;top:${rect.top+rect.height/2}px;pointer-events:none;z-index:9999;`;
+                                        container.appendChild(piece);
+                                        const angle = Math.random()*Math.PI*2;
+                                        const dist = 80+Math.random()*160;
+                                        piece.animate([
+                                            { transform:'translate(0,0) scale(1)', opacity:1 },
+                                            { transform:`translate(${Math.cos(angle)*dist}px,${Math.sin(angle)*dist}px) scale(0)`, opacity:0 }
+                                        ],{ duration:900+Math.random()*600, easing:'cubic-bezier(0.25,0.46,0.45,0.94)' }).onfinish = () => piece.remove();
+                                    }
+                                }}
                             >
-                                <span className="material-symbols-outlined font-bold text-on-primary">save</span>
-                                <span className="font-headline-md text-on-primary font-bold">Save Entry</span>
+                                <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-500 bg-gradient-to-r from-transparent via-white/25 to-transparent pointer-events-none"></div>
+                                <span className="material-symbols-outlined relative z-10">save</span>
+                                <span className="relative z-10 font-bold uppercase tracking-widest">Save Entry</span>
                             </button>
+                            <div id="petrol-confetti" className="fixed inset-0 pointer-events-none z-[999]"></div>
                         </div>
                     </form>
                 </main>

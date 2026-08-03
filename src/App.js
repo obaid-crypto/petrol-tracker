@@ -1356,25 +1356,7 @@ function App() {
                     <div className="absolute top-[40%] -right-[10%] w-[30%] h-[30%] bg-secondary/5 rounded-full blur-[100px]"></div>
                 </div>
 
-                {/* TopAppBar */}
-                <header className="w-full top-0 pt-6 flex justify-between items-center z-50 max-w-lg mx-auto px-container-padding">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full overflow-hidden border border-white/10">
-                            <img 
-                                className="w-full h-full object-cover" 
-                                alt="Driver profile" 
-                                src="https://lh3.googleusercontent.com/aida-public/AB6AXuBLOQKXHtXXExrSkQRimHNBihV-jjRsTc47yKNxbtoPRCF6E4Zk1HkYcWUyJMIlaAon9MUVDIl0KBViE2uMUQ4XRbtJzvGQhSCVYqv-1MdWKxtrTJGEF6Ib42qwD4C37FX0-tA50HK5Q5uLhdSblTwNeCY5zlOPFRq9nPSr7NGAJFTPDnTfuDpCrj9OARH-_xgo6VM_tSCMQKUKt24X6eOvWtpvXU7PGFlg3T_kfPie631vWJ9PX2YHmg" 
-                            />
-                        </div>
-                        <h1 className="font-headline-lg text-headline-lg font-extrabold text-primary tracking-tight" onClick={() => setActiveScreen('dashboard')} style={{ cursor: 'pointer' }}>Fuel &amp; Ride</h1>
-                    </div>
-                    <button 
-                        className="text-primary hover:opacity-80 transition-opacity duration-300 active:scale-95 transition-transform"
-                        onClick={() => alert("No new notifications")}
-                    >
-                        <span className="material-symbols-outlined text-[28px]">notifications</span>
-                    </button>
-                </header>
+
 
                 <main className="pb-32 pt-6 max-w-lg mx-auto space-y-5 px-container-padding">
 
@@ -1593,20 +1575,7 @@ function App() {
                 {isPersonalActive ? (
                     /* layout when personal trip is active (TRIP IN PROGRESS) */
                     <div className="w-full animate-zoom-in-fade">
-                        {/* Top App Bar */}
-                        <header className="flex justify-between items-center px-container-padding py-4 w-full bg-transparent max-w-md mx-auto">
-                            <div className="flex items-center gap-3">
-                                <span className="material-symbols-outlined text-primary text-headline-md">motorcycle</span>
-                                <h1 className="font-display-hero text-headline-md tracking-tighter text-primary font-extrabold uppercase">PERSONAL TRIP</h1>
-                            </div>
-                            <div className="w-10 h-10 rounded-full border border-outline/20 overflow-hidden">
-                                <img 
-                                    className="w-full h-full object-cover" 
-                                    alt="Driver profile" 
-                                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuBLOQKXHtXXExrSkQRimHNBihV-jjRsTc47yKNxbtoPRCF6E4Zk1HkYcWUyJMIlaAon9MUVDIl0KBViE2uMUQ4XRbtJzvGQhSCVYqv-1MdWKxtrTJGEF6Ib42qwD4C37FX0-tA50HK5Q5uLhdSblTwNeCY5zlOPFRq9nPSr7NGAJFTPDnTfuDpCrj9OARH-_xgo6VM_tSCMQKUKt24X6eOvWtpvXU7PGFlg3T_kfPie631vWJ9PX2YHmg" 
-                                />
-                            </div>
-                        </header>
+
 
                         <main className="px-container-padding space-y-element-gap mt-4 max-w-md mx-auto">
                             {/* Trip Type Badge */}
@@ -1704,28 +1673,10 @@ function App() {
                 ) : (
                     /* layout before personal trip starts (START PERSONAL TRIP) */
                     <div className="w-full">
-                        {/* TopAppBar */}
-                        <header className="fixed top-0 left-0 right-0 w-full z-50 flex items-center justify-between px-container-padding h-16 bg-surface/80 backdrop-blur-xl border-b border-white/10 shadow-sm max-w-md mx-auto">
-                            <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-full overflow-hidden border border-primary/30">
-                                    <img 
-                                        className="w-full h-full object-cover" 
-                                        alt="Driver profile" 
-                                        src="https://lh3.googleusercontent.com/aida-public/AB6AXuBLOQKXHtXXExrSkQRimHNBihV-jjRsTc47yKNxbtoPRCF6E4Zk1HkYcWUyJMIlaAon9MUVDIl0KBViE2uMUQ4XRbtJzvGQhSCVYqv-1MdWKxtrTJGEF6Ib42qwD4C37FX0-tA50HK5Q5uLhdSblTwNeCY5zlOPFRq9nPSr7NGAJFTPDnTfuDpCrj9OARH-_xgo6VM_tSCMQKUKt24X6eOvWtpvXU7PGFlg3T_kfPie631vWJ9PX2YHmg" 
-                                    />
-                                </div>
-                                <span className="font-display-hero text-headline-md text-primary tracking-tight font-extrabold" onClick={() => setActiveScreen('dashboard')} style={{ cursor: 'pointer' }}>Personal Trip</span>
-                            </div>
-                            <button 
-                                className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/5 transition-colors active:scale-95 duration-200 text-primary"
-                                onClick={() => alert(isTracking ? "A trip is currently active on another screen!" : "No new notifications")}
-                            >
-                                <span className="material-symbols-outlined">notifications</span>
-                            </button>
-                        </header>
+
 
                         {/* Main Content Canvas */}
-                        <main className="w-full max-w-md px-container-padding mt-24 flex flex-col gap-element-gap mx-auto">
+                        <main className="w-full max-w-md px-container-padding mt-6 flex flex-col gap-element-gap mx-auto">
                             {/* Header Section */}
                             <section className="flex flex-col gap-1">
                                 <h1 className="font-headline-lg text-headline-lg text-on-surface font-bold">Private Mode</h1>
@@ -1811,25 +1762,7 @@ function App() {
                 {isRideActive ? (
                     /* RIDE ACTIVE TRACKING STATE */
                     <div className="w-full relative z-10 animate-zoom-in-fade">
-                        {/* Top App Bar */}
-                        <header className="w-full top-0 flex justify-between items-center px-container-padding py-4 w-full bg-transparent max-w-md mx-auto">
-                            <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-full overflow-hidden border border-primary/30">
-                                    <img 
-                                        className="w-full h-full object-cover" 
-                                        alt="Driver profile" 
-                                        src="https://lh3.googleusercontent.com/aida-public/AB6AXuCNrUwA_nlcrnRZv4b475RxLSIDJ3rrhDgl9QAb_hnoCsLPiGbgD-hV6Yh2BJNRElEdBhYHW08i3rA9lIk-f8-6lyUzXUAbTrherxCVBepHvtV-b1qXvbUrLnarSedxPwBwIh3GzITQhAnjC9Ko_J_vibLtvJ0TFsd4fLQxo0l-Xo85xXaP5yogoe7tpPC4lWOvZx5oVrXNf6Gh7ZBzYidAoOTHfrVZVGJBbozVb03uzE3l64udfbqOKA" 
-                                    />
-                                </div>
-                                <h1 className="font-headline-md text-[24px] text-on-surface flex items-center gap-2 font-bold">
-                                    <span className="material-symbols-outlined text-secondary">card_travel</span>
-                                    Ride Trip
-                                </h1>
-                            </div>
-                            <button className="hover:opacity-80 transition-opacity active:scale-95 text-on-surface">
-                                <span className="material-symbols-outlined text-[28px]">notifications</span>
-                            </button>
-                        </header>
+
 
                         <main className="px-container-padding space-y-element-gap max-w-md mx-auto mt-4">
                             {/* Speedometer Section */}
@@ -1885,22 +1818,7 @@ function App() {
                 ) : (
                     /* RIDE IDLE STATE */
                     <div className="w-full relative z-10 animate-zoom-in-fade">
-                        {/* Top Navigation Bar */}
-                        <header className="w-full flex items-center justify-between px-container-padding h-16 bg-surface/80 dark:bg-surface/80 backdrop-blur-xl border-b border-white/10 shadow-sm max-w-md mx-auto">
-                            <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-full overflow-hidden border border-secondary/30">
-                                    <img 
-                                        className="w-full h-full object-cover" 
-                                        alt="Driver profile"
-                                        src="https://lh3.googleusercontent.com/aida-public/AB6AXuBp5R0k8vmXlCArRYkpvTyqmvqR-vAdgLgLEJnvjO0expPrL9QC6LuGxeOypbWvc5B5RhidjzbJxUDI-8XZoP-YHAD57O3mDWZthHKknURU6Jtiwc4G-z8G44TFyfh-_ddi33wN4ksq7elWHBiT186ke0JGBy4ZYjdWJJ_TUDMB1gs2lEqXtlShnbzLD3uYlTw8zjbdYqcPZhtArr52S0k-CNhRYK35a3QGxCteWDzfRLgtzIg95Wlc3A" 
-                                    />
-                                </div>
-                                <span className="font-headline-md text-headline-md text-primary tracking-tight font-bold">Start Ride</span>
-                            </div>
-                            <button className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/5 transition-colors scale-95 active:duration-150 text-on-surface-variant">
-                                <span className="material-symbols-outlined">notifications</span>
-                            </button>
-                        </header>
+
 
                         <main className="px-container-padding flex flex-col max-w-md mx-auto mt-6">
                             {/* Welcome Header */}
@@ -2058,20 +1976,8 @@ function App() {
 
         return (
             <div className="w-full animate-zoom-in-fade">
-                {/* Top App Bar */}
-                <header className="flex justify-between items-center w-full sticky top-0 z-50 bg-surface/10 backdrop-blur-md px-container-padding py-4 max-w-md mx-auto">
-                    <div className="flex flex-col">
-                        <h1 className="font-display-hero text-headline-md text-primary dark:text-primary tracking-tight font-extrabold" onClick={() => setActiveScreen('dashboard')} style={{ cursor: 'pointer' }}>Fare Calculator</h1>
-                        <p className="font-label-caps text-[10px] text-on-surface-variant/70 uppercase tracking-widest -mt-1 font-bold">Compare offers Ã‚Â· negotiate better rates</p>
-                    </div>
-                    <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-primary/40">
-                            <img className="w-full h-full object-cover" alt="Driver profile" src="https://lh3.googleusercontent.com/aida-public/AB6AXuADqWXwzNBqr3QaDioTFJ7Y2mi-UFl6-7-z1cxqki1Io_bF1ymZJI8I8heuUCq7IWynvJC23JrEyTl8tEnsHbEQfUdTrTJ2Z92weowkgQ8jw-sYhiQzfb2Lhwn0DvMuK--2ua5p2Jcm2h2sfKkOVR1XmPoUdia5KorWNey6RLFc0qJw92mUtWgBnwkPFf-YMEdoH2TbRcO5X-iQFZ6CqkuLOwxggk31CVGrjfSJVPxuenQhWaTDNKvTLA" />
-                        </div>
-                    </div>
-                </header>
 
-                <main className="px-container-padding mt-4 space-y-6 max-w-md mx-auto pb-32">
+                <main className="px-container-padding space-y-6 max-w-md mx-auto pb-32">
 
                     {/* Warning Banner */}
                     {petrolEntries.length === 0 && (
@@ -2300,24 +2206,7 @@ function App() {
 
         return (
             <div className="w-full">
-                {/* Top App Bar */}
-                <header className="w-full top-0 sticky z-50 bg-background/80 backdrop-blur-xl">
-                    <div className="flex items-center justify-between px-container-padding py-4 w-full max-w-2xl mx-auto">
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center overflow-hidden border border-white/10 cursor-pointer" onClick={() => setActiveScreen('dashboard')}>
-                                <img 
-                                    className="w-full h-full object-cover" 
-                                    alt="Driver profile" 
-                                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuDMrCAwXi9vMdHWDwYCFAgA84tSygJjvvh5qwuIF-gwkLNow4-RSTTedAueM3DuVNPGxapivMvnZp-R6l5p8JkxdfrAsrCY7B0Tomxia-pah6QJy0pvdC79XNTSeNu7LTYeUkV-5iQL_0IhiAAvKipuE0UC2naxA5vTmnGGvQ1ANHkboQEGXCEkGLBDqi9XFGO5UZr82bqrrTXyHWCu9oTyZxXy8xPzPC-VUH5UHfrnbYAbYlHEZux-QA" 
-                                />
-                            </div>
-                            <h1 className="font-display-hero text-headline-lg text-primary tracking-tighter font-extrabold">Fuel History</h1>
-                        </div>
-                        <button className="text-primary hover:opacity-80 transition-all duration-300 ease-in-out">
-                            <span className="material-symbols-outlined">notifications</span>
-                        </button>
-                    </div>
-                </header>
+
 
                 <main className="px-container-padding pt-6 space-y-6 max-w-2xl mx-auto pb-24">
                     {/* Background Decorative Elements (Subtle Glows) */}
@@ -2447,7 +2336,7 @@ function App() {
     return (
         <div className="min-h-screen radial-bg pb-32">
             {/* Top Sticky Header */}
-            {activeScreen !== 'fuel' && activeScreen !== 'dashboard' && activeScreen !== 'personal' && activeScreen !== 'ride' && activeScreen !== 'history' && (
+            {activeScreen !== 'fuel' && activeScreen !== 'dashboard' && activeScreen !== 'personal' && activeScreen !== 'ride' && activeScreen !== 'history' && activeScreen !== 'calculator' && (
                 <header className="bg-background/80 backdrop-blur-xl border-b border-white/5 sticky top-0 z-50 shadow-sm">
                     <div className="flex justify-between items-center px-container-margin py-xs w-full max-w-7xl mx-auto h-16">
                         <div className="flex items-center gap-sm">

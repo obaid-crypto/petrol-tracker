@@ -1116,27 +1116,39 @@ function App() {
         const maxExpectedRollingMileage = 30;
         const rollingAvgPercent = Math.min(100, Math.max(0, (rollingAvgVal / maxExpectedRollingMileage) * 100));
 
+        // Arc gauge math: circumference of r=46 circle ≈ 289
+        const maxMileage = 60;
+        const currentMileage = effectiveMileageData.mileage > 0 ? effectiveMileageData.mileage : 0;
+        const gaugeFill = Math.min(1, currentMileage / maxMileage);
+        const circumference = 2 * Math.PI * 46;
+        const dashArray = `${(gaugeFill * circumference).toFixed(1)} ${circumference.toFixed(1)}`;
+
         return (
-            <div className="space-y-xl max-w-md mx-auto">
+            <div className="space-y-xl max-w-md mx-auto pb-8">
+
                 {/* Top App Bar */}
-                <header className="w-full pt-6 flex justify-between items-center transition-opacity duration-300">
+                <header className="w-full pt-6 flex justify-between items-center">
                     <div className="flex flex-col">
-                        <h1 className="font-headline-lg text-headline-lg font-extrabold text-primary">Fuel & Ride</h1>
-                        <p className="font-body-md text-body-md text-on-surface-variant">Track fuel efficiency</p>
+                        <h1 className="font-headline-lg text-headline-lg text-primary leading-tight">Fuel &amp; Ride</h1>
+                        <p className="font-label-caps text-[10px] text-on-surface-variant uppercase tracking-[0.2em]">Track fuel efficiency</p>
                     </div>
-                    <div className="flex items-center gap-4">
-                        <button 
-                            className="material-symbols-outlined text-primary text-2xl hover:opacity-80 transition-opacity active:scale-95 transition-transform"
-                            onClick={() => alert("No new notifications")}
+                    <div className="flex items-center gap-md">
+                        <button
+                            className="material-symbols-outlined text-primary hover:opacity-80 transition-opacity active:scale-95"
+                            onClick={() => alert('No new notifications')}
                             title="Notifications"
                         >
                             notifications
                         </button>
-                        <div className="w-10 h-10 rounded-full border border-primary/20 bg-surface-container-high overflow-hidden cursor-pointer hover:opacity-80 transition-opacity active:scale-95 transition-transform" onClick={() => alert("Driver Profile: App settings are managed below.")} title="Driver Profile">
-                            <img 
-                                className="w-full h-full object-cover" 
-                                alt="Driver Profile"
-                                src="https://lh3.googleusercontent.com/aida-public/AB6AXuBLOQKXHtXXExrSkQRimHNBihV-jjRsTc47yKNxbtoPRCF6E4Zk1HkYcWUyJMIlaAon9MUVDIl0KBViE2uMUQ4XRbtJzvGQhSCVYqv-1MdWKxtrTJGEF6Ib42qwD4C37FX0-tA50HK5Q5uLhdSblTwNeCY5zlOPFRq9nPSr7NGAJFTPDnTfuDpCrj9OARH-_xgo6VM_tSCMQKUKt24X6eOvWtpvXU7PGFlg3T_kfPie631vWJ9PX2YHmg" 
+                        <div
+                            className="w-10 h-10 rounded-full border-2 border-primary/30 p-0.5 overflow-hidden cursor-pointer hover:opacity-80 transition-opacity"
+                            onClick={() => alert('Driver Profile: App settings are managed below.')}
+                            title="Driver Profile"
+                        >
+                            <img
+                                alt="Profile"
+                                className="w-full h-full object-cover rounded-full"
+                                src="https://lh3.googleusercontent.com/aida-public/AB6AXuAwjmFtRgSpk1FHcfwSzh1upW-FdfiZxkquEY3hblRuGLQHvpX6iOH1a87ByqehaB4oh0gYD9TpGI6w8XqSMJa7vevEUbcqqz9UInqmDAMFA4wqc0bi7FmqaJVDKOcDX30-Siydmy8JdhZsaY5J9OzxaSg3hs0CnzAHaSvO8z1hfYe_tSbrJ0o0ZzcJH-PFsb1HLHhI6UzPtkOqSb4TTerRonLEQy6vLyNjmqR1K7ZBoiPqb6yhenLpmA"
                             />
                         </div>
                     </div>
@@ -1144,7 +1156,7 @@ function App() {
 
                 {/* Install App Banner */}
                 {showInstallPrompt && canInstall && (
-                    <section className="glass-card rounded-xl p-4 flex items-center justify-between transition-all duration-500 opacity-100 translate-y-0">
+                    <section className="glass-card rounded-xl p-4 flex items-center justify-between transition-all duration-500">
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-lg fuel-active-gradient flex items-center justify-center text-on-primary">
                                 <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>install_mobile</span>
@@ -1155,14 +1167,14 @@ function App() {
                             </div>
                         </div>
                         <div className="flex items-center gap-4">
-                            <button 
+                            <button
                                 className="font-label-caps text-label-caps text-on-surface-variant hover:text-on-surface transition-colors active:scale-95"
                                 onClick={() => setShowInstallPrompt(false)}
                             >
                                 Later
                             </button>
-                            <button 
-                                className="fuel-active-gradient px-4 py-2 rounded-full font-label-caps text-label-caps text-on-primary context-glow-primary hover:opacity-90 transition-all scale-95 active:scale-90"
+                            <button
+                                className="fuel-active-gradient px-4 py-2 rounded-full font-label-caps text-label-caps text-on-primary context-glow-primary hover:opacity-90 active:scale-90"
                                 onClick={handleInstallClick}
                             >
                                 Install
@@ -1171,165 +1183,209 @@ function App() {
                     </section>
                 )}
 
-                {/* Current Tank Card */}
-                <section className="glass-card rounded-2xl p-container-padding relative overflow-hidden transition-all duration-500 opacity-100 translate-y-0">
-                    {/* Subtle tint glow */}
-                    <div className="absolute -top-12 -right-12 w-32 h-32 bg-primary/5 blur-[40px] rounded-full"></div>
-                    <div className="flex justify-between items-start mb-6">
-                        <div className="flex items-center gap-3">
-                            <span className="material-symbols-outlined text-primary">local_gas_station</span>
-                            <h2 className="font-headline-md text-headline-md text-on-surface">Current Tank</h2>
-                        </div>
-                        {trend !== null ? (
-                            trend >= 0 ? (
-                                <div className="bg-primary/10 px-3 py-1 rounded-full flex items-center gap-1">
-                                    <span className="material-symbols-outlined text-primary text-sm">trending_up</span>
-                                    <span className="text-[12px] font-bold text-primary">+{trend.toFixed(1)} km/L</span>
+                {/* ── Current Tank Hero Section ── */}
+                <section className="relative pt-lg overflow-visible">
+                    <div className="absolute -top-10 -left-10 w-64 h-64 bg-primary/10 rounded-full blur-3xl -z-10 pointer-events-none"></div>
+
+                    <div className="flex flex-col items-center">
+                        <span className="font-label-caps text-label-caps text-on-surface-variant uppercase tracking-widest mb-md">Current Tank</span>
+
+                        {/* Arc Gauge */}
+                        <div className="relative w-72 h-72 mx-auto flex items-center justify-center rounded-full bg-surface-container-lowest border border-primary/10 shadow-[0_0_60px_rgba(75,223,159,0.1)] glow-mint shadow-2xl">
+                            <svg className="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 100 100">
+                                <circle cx="50" cy="50" r="46" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="4" />
+                                {currentMileage > 0 && (
+                                    <circle
+                                        cx="50" cy="50" r="46" fill="none"
+                                        stroke="url(#gaugeGrad)" strokeWidth="4"
+                                        strokeLinecap="round"
+                                        strokeDasharray={dashArray}
+                                        style={{ transition: 'stroke-dasharray 1s cubic-bezier(0.34,1.56,0.64,1)' }}
+                                    />
+                                )}
+                                <defs>
+                                    <linearGradient id="gaugeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                                        <stop offset="0%" stopColor="#6bfbb8" />
+                                        <stop offset="100%" stopColor="#b8c4ff" />
+                                    </linearGradient>
+                                </defs>
+                            </svg>
+
+                            {/* Inner disc */}
+                            <div className="relative w-[85%] h-[85%] rounded-full bg-gradient-to-br from-surface-container-high to-surface-container flex flex-col items-center justify-center border border-white/5 shadow-inner">
+                                <div className="flex flex-col items-center justify-center">
+                                    <span className="font-label-caps text-[10px] text-on-surface-variant/60 uppercase tracking-widest mb-xs">Current Mileage</span>
+                                    <div className="flex flex-col items-center justify-center">
+                                        <h2 className="font-display-hero text-6xl text-primary drop-shadow-[0_0_15px_rgba(107,251,184,0.3)]">
+                                            {currentMileage > 0 ? currentMileage.toFixed(1) : '0.0'}
+                                        </h2>
+                                        <span className="font-label-caps text-label-caps text-on-surface-variant">km/L</span>
+                                    </div>
+                                </div>
+                                <div className="absolute inset-6 rounded-full border border-dashed border-primary/10 pointer-events-none"></div>
+                            </div>
+
+                            {/* Trend badge */}
+                            {trend !== null ? (
+                                <div className={`absolute -top-3 -right-3 px-3 py-1.5 rounded-full flex items-center gap-1 text-[11px] font-bold border backdrop-blur-sm ${
+                                    trend >= 0
+                                        ? 'bg-primary/10 border-primary/20 text-primary'
+                                        : 'bg-error/10 border-error/20 text-error'
+                                }`}>
+                                    <span className="material-symbols-outlined text-[14px]">{trend >= 0 ? 'trending_up' : 'trending_down'}</span>
+                                    {trend >= 0 ? '+' : ''}{trend.toFixed(1)}
                                 </div>
                             ) : (
-                                <div className="bg-error/10 px-3 py-1 rounded-full flex items-center gap-1">
-                                    <span className="material-symbols-outlined text-error text-sm">trending_down</span>
-                                    <span className="text-[12px] font-bold text-error">{trend.toFixed(1)} km/L</span>
+                                <div className="absolute -top-3 -right-3 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-[11px] font-bold text-on-surface-variant backdrop-blur-sm">
+                                    First Fill
                                 </div>
-                            )
-                        ) : (
-                            <div className="bg-white/5 px-3 py-1 rounded-full flex items-center gap-1">
-                                <span className="text-[12px] font-bold text-on-surface-variant">First Fill</span>
+                            )}
+                        </div>
+
+                        {/* Asymmetric Litres & Distance Cards */}
+                        <div className="flex w-full gap-md mt-xl">
+                            <div className="glass-card p-md rounded-2xl flex-none w-[40%] border-l-4 border-l-primary/30 relative overflow-hidden group">
+                                <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                                <span className="block font-label-caps text-[10px] text-on-secondary-container mb-xs">Litres</span>
+                                <span className="font-data-lg text-xl text-on-surface">
+                                    {lastEntry ? `${lastEntry.litres.toFixed(2)} L` : '0.00 L'}
+                                </span>
                             </div>
-                        )}
-                    </div>
-
-                    {/* Hero Tile: Current Mileage */}
-                    <div className="flex flex-col items-center justify-center py-6 bg-white/5 rounded-2xl border border-white/5 mb-4 relative overflow-hidden">
-                        {effectiveMileageData.isEstimated && (
-                            <span className="absolute top-4 right-4 bg-tertiary-container text-on-tertiary-container text-[10px] font-extrabold px-2 py-0.5 rounded">EST</span>
-                        )}
-                        <p className="font-label-caps text-label-caps text-outline mb-1">Current Mileage</p>
-                        <div className="flex items-baseline gap-1">
-                            <span className="font-display-hero text-display-hero text-primary tracking-tighter">
-                                {effectiveMileageData.mileage > 0 ? effectiveMileageData.mileage.toFixed(1) : '0.0'}
-                            </span>
-                            <span className="font-body-md text-body-md text-primary/70">km/L</span>
-                        </div>
-                    </div>
-
-                    {/* Stat Grid */}
-                    <div className="grid grid-cols-2 gap-3 mb-6">
-                        <div className="bg-white/5 p-4 rounded-xl border border-white/5">
-                            <p className="font-label-caps text-label-caps text-outline mb-1 uppercase">Litres</p>
-                            <p className="font-stats-numeral text-stats-numeral text-on-surface">
-                                {lastEntry ? `${lastEntry.litres.toFixed(2)} L` : '0.00 L'}
-                            </p>
-                        </div>
-                        <div className="bg-white/5 p-4 rounded-xl border border-white/5">
-                            <p className="font-label-caps text-label-caps text-outline mb-1 uppercase">Distance</p>
-                            <p className="font-stats-numeral text-stats-numeral text-on-surface">
-                                {totalKmSinceLastFill.toFixed(1)} km
-                            </p>
-                        </div>
-                    </div>
-
-                    {/* Rolling Average Row */}
-                    <div className="flex items-center justify-between px-2 pt-4 border-t border-white/10">
-                        <span className="font-label-caps text-label-caps text-on-surface-variant">Rolling Average</span>
-                        <div className="flex gap-2 items-center">
-                            <div className="w-16 h-1.5 bg-white/10 rounded-full overflow-hidden">
-                                <div className="h-full fuel-active-gradient" style={{ width: `${rollingAvgPercent}%` }}></div>
+                            <div className="glass-card p-md rounded-2xl flex-1 border-r-4 border-r-secondary/30 relative overflow-hidden group">
+                                <div className="absolute -right-4 -top-4 w-16 h-16 bg-secondary/5 rounded-full blur-xl pointer-events-none"></div>
+                                <span className="block font-label-caps text-[10px] text-on-secondary-container mb-xs">Distance</span>
+                                <span className="font-data-lg text-xl text-on-surface">
+                                    {totalKmSinceLastFill.toFixed(1)} km
+                                </span>
                             </div>
-                            <span className="font-stats-numeral text-[14px] text-on-surface">{rollingAvgVal.toFixed(1)} km/L</span>
                         </div>
                     </div>
                 </section>
 
-                {/* Quick Actions */}
-                <section className="grid grid-cols-2 gap-4">
-                    <button 
-                        className="glass-card rounded-2xl p-4 flex flex-col items-center justify-center text-center gap-2 hover:bg-white/10 hover:border-primary/20 transition-all duration-200 active:scale-95 cursor-pointer" 
+                {/* ── Rolling Average ── */}
+                <section className="space-y-sm">
+                    <div className="flex justify-between items-end px-xs">
+                        <span className="font-label-caps text-label-caps text-on-surface-variant">Rolling Average</span>
+                        <span className="font-data-lg text-xl text-primary">{rollingAvgVal.toFixed(1)} km/L</span>
+                    </div>
+                    <div className="relative h-3 w-full bg-surface-container rounded-full overflow-visible">
+                        <div
+                            className="absolute top-0 left-0 h-full bg-gradient-to-r from-primary to-secondary rounded-full transition-all duration-700"
+                            style={{ width: `${rollingAvgPercent}%` }}
+                        ></div>
+                        {rollingAvgPercent > 2 && (
+                            <div
+                                className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-4 h-4 bg-white rounded-full glow-mint transition-all duration-700"
+                                style={{ left: `${rollingAvgPercent}%` }}
+                            ></div>
+                        )}
+                    </div>
+                </section>
+
+                {/* ── Quick Actions ── */}
+                <section className="grid grid-cols-1 gap-md">
+                    <button
+                        className="group relative overflow-hidden glass-card p-lg rounded-full flex items-center justify-between transition-all active:scale-95 border border-primary/20"
                         onClick={handleManualEntryRequest}
                     >
-                        <span className="material-symbols-outlined text-primary text-[28px]">add_road</span>
-                        <span className="font-label-caps text-label-caps text-on-surface font-semibold">Add Manual KM</span>
+                        <div className="absolute inset-0 bg-primary/5 group-hover:bg-primary/10 transition-colors rounded-full"></div>
+                        <div className="flex items-center gap-md relative z-10">
+                            <div className="w-12 h-12 rounded-full bg-primary-container/20 flex items-center justify-center text-primary-container glow-mint">
+                                <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>speed</span>
+                            </div>
+                            <span className="font-headline-md text-lg text-on-surface">Add Manual KM</span>
+                        </div>
+                        <span className="material-symbols-outlined text-primary-container relative z-10">chevron_right</span>
                     </button>
-                    <button 
-                        className="glass-card rounded-2xl p-4 flex flex-col items-center justify-center text-center gap-2 hover:bg-white/10 hover:border-secondary/20 transition-all duration-200 active:scale-95 cursor-pointer" 
+
+                    <button
+                        className="group relative overflow-hidden glass-card p-lg rounded-full flex items-center justify-between transition-all active:scale-95 border border-secondary/20"
                         onClick={handleRideEntryRequest}
                     >
-                        <span className="material-symbols-outlined text-secondary text-[28px]">app_shortcut</span>
-                        <span className="font-label-caps text-label-caps text-on-surface font-semibold">Log Ride Manually</span>
+                        <div className="absolute inset-0 bg-secondary/5 group-hover:bg-secondary/10 transition-colors rounded-full"></div>
+                        <div className="flex items-center gap-md relative z-10">
+                            <div className="w-12 h-12 rounded-full bg-secondary-container/20 flex items-center justify-center text-secondary-container glow-lavender">
+                                <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>local_gas_station</span>
+                            </div>
+                            <span className="font-headline-md text-lg text-on-surface">Log Ride Manually</span>
+                        </div>
+                        <span className="material-symbols-outlined text-secondary-container relative z-10">chevron_right</span>
                     </button>
                 </section>
 
-                {/* This Month Card */}
-                <section className="flex flex-col gap-4 transition-all duration-500 opacity-100 translate-y-0">
+                {/* ── This Month – Asymmetric Layout ── */}
+                <section className="space-y-lg">
                     <div className="flex justify-between items-center">
-                        <h2 className="font-headline-md text-headline-md text-on-surface">This Month</h2>
-                        <button 
-                            className="font-label-caps text-label-caps text-primary hover:opacity-80 transition-opacity cursor-pointer"
+                        <h3 className="font-headline-md text-headline-md text-on-surface">This Month</h3>
+                        <button
+                            className="font-label-caps text-label-caps text-primary hover:underline transition-all cursor-pointer"
                             onClick={() => setActiveScreen('history')}
                         >
                             View Report
                         </button>
                     </div>
-                    <div className="grid grid-cols-2 grid-rows-2 gap-4">
-                        {/* Stat Tile: Litres */}
-                        <div className="glass-card rounded-2xl p-4 flex flex-col justify-between min-h-[120px]">
-                            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center mb-2">
-                                <span className="material-symbols-outlined text-primary text-sm">water_drop</span>
+
+                    <div className="flex flex-col gap-md">
+                        {/* Row 1: 40/60 — Litres | Spent */}
+                        <div className="flex gap-md h-24">
+                            <div className="glass-card p-md rounded-2xl flex-none w-[40%] border-l-4 border-l-primary relative overflow-hidden kinetic-bg">
+                                <span className="material-symbols-outlined absolute -right-2 -bottom-2 text-6xl opacity-20 text-primary/10 pointer-events-none">opacity</span>
+                                <div className="flex flex-col h-full justify-between relative z-10">
+                                    <span className="font-label-caps text-[10px] text-on-surface-variant">Litres</span>
+                                    <span className="font-data-lg text-headline-md text-on-surface">{monthly.totalLitres.toFixed(1)} L</span>
+                                </div>
                             </div>
-                            <div>
-                                <p className="font-label-caps text-label-caps text-outline uppercase mb-0.5">Litres</p>
-                                <p className="font-stats-numeral text-stats-numeral text-on-surface">{monthly.totalLitres.toFixed(1)} L</p>
-                            </div>
-                        </div>
-                        {/* Stat Tile: Spent */}
-                        <div className="glass-card rounded-2xl p-4 flex flex-col justify-between min-h-[120px]">
-                            <div className="w-8 h-8 rounded-full bg-secondary-container/20 flex items-center justify-center mb-2">
-                                <span className="material-symbols-outlined text-secondary text-sm">payments</span>
-                            </div>
-                            <div>
-                                <p className="font-label-caps text-label-caps text-outline uppercase mb-0.5">Spent (PKR)</p>
-                                <p className="font-stats-numeral text-stats-numeral text-on-surface">PKR {monthly.totalSpent.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</p>
-                            </div>
-                        </div>
-                        {/* Stat Tile: Distance */}
-                        <div className="glass-card rounded-2xl p-4 flex flex-col justify-between min-h-[120px]">
-                            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center mb-2">
-                                <span className="material-symbols-outlined text-primary text-sm">route</span>
-                            </div>
-                            <div>
-                                <p className="font-label-caps text-label-caps text-outline uppercase mb-0.5">Distance</p>
-                                <p className="font-stats-numeral text-stats-numeral text-on-surface">{monthly.totalKm.toFixed(1)} km</p>
+                            <div className="glass-card p-md rounded-2xl flex-none w-[60%] border-r-4 border-r-secondary text-right relative overflow-hidden bg-gradient-to-bl from-secondary/5 to-transparent">
+                                <span className="material-symbols-outlined text-secondary opacity-5 absolute -left-2 -bottom-2 text-6xl pointer-events-none">payments</span>
+                                <div className="absolute top-0 right-0 w-8 h-8 bg-secondary/10 blur-xl pointer-events-none"></div>
+                                <div className="flex flex-col h-full justify-between relative z-10">
+                                    <span className="font-label-caps text-[10px] text-on-surface-variant uppercase tracking-wider">Spent</span>
+                                    <div className="flex flex-col items-end">
+                                        <span className="font-data-lg text-on-surface text-headline-md">
+                                            PKR {monthly.totalSpent.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                                        </span>
+                                        <span className="text-[10px] text-on-surface-variant/60 font-label-caps">Total</span>
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                        {/* Stat Tile: Avg Mileage */}
-                        <div className="glass-card rounded-2xl p-4 flex flex-col justify-between min-h-[120px]">
-                            <div className="w-8 h-8 rounded-full bg-tertiary-container/20 flex items-center justify-center mb-2">
-                                <span className="material-symbols-outlined text-tertiary text-sm">speed</span>
+
+                        {/* Row 2: 60/40 — Distance | Avg Mileage */}
+                        <div className="flex gap-md h-24">
+                            <div className="glass-card p-md rounded-2xl flex-none w-[60%] border-l-4 border-l-primary relative overflow-hidden bg-gradient-to-tr from-primary/5 to-transparent">
+                                <span className="material-symbols-outlined text-primary opacity-5 absolute -right-2 -top-2 text-6xl pointer-events-none">route</span>
+                                <div className="flex flex-col h-full justify-between relative z-10">
+                                    <span className="font-label-caps text-[10px] text-on-surface-variant">Distance</span>
+                                    <span className="font-data-lg text-headline-md text-on-surface">{monthly.totalKm.toFixed(1)} km</span>
+                                </div>
                             </div>
-                            <div>
-                                <p className="font-label-caps text-label-caps text-outline uppercase mb-0.5">Avg Mileage</p>
-                                <p className="font-stats-numeral text-stats-numeral text-on-surface">{monthly.avgMileage} km/L</p>
+                            <div className="glass-card p-md rounded-2xl flex-none w-[40%] border-r-4 border-r-secondary text-right relative overflow-hidden kinetic-bg">
+                                <div className="absolute inset-0 opacity-20 pointer-events-none" style={{ backgroundImage: 'radial-gradient(1px 1px, rgba(184,196,255,0.2) 1%, transparent 1%)', backgroundSize: '10px 10px' }}></div>
+                                <span className="material-symbols-outlined text-secondary opacity-5 absolute -left-2 -top-2 text-6xl pointer-events-none">trending_up</span>
+                                <div className="flex flex-col h-full justify-between relative z-10">
+                                    <span className="font-label-caps text-[10px] text-on-surface-variant">Avg Mileage</span>
+                                    <span className="font-data-lg text-headline-md text-on-surface">{monthly.avgMileage} km/L</span>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </section>
 
-                {/* Settings Card */}
-                <section className="glass-card rounded-2xl p-container-padding flex flex-col gap-3 mt-4 mb-8 transition-all duration-500 opacity-100 translate-y-0">
-                    <h3 className="font-label-caps text-label-caps text-outline uppercase mb-1">Data Management</h3>
-                    <button 
-                        className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl border border-primary/30 text-primary font-label-caps text-label-caps hover:bg-primary/5 transition-colors cursor-pointer active:scale-95 transition-transform font-bold"
+                {/* ── Data Management ── */}
+                <section className="flex flex-col gap-md pb-4">
+                    <button
+                        className="w-full py-md px-lg rounded-xl glass-card flex items-center justify-center gap-md border border-outline-variant hover:bg-surface-container transition-colors group cursor-pointer active:scale-95"
                         onClick={exportData}
                     >
-                        <span className="material-symbols-outlined text-lg">download</span>
-                        Export Data (JSON)
+                        <span className="material-symbols-outlined text-on-surface-variant group-hover:text-primary transition-colors">ios_share</span>
+                        <span className="font-label-caps text-label-caps text-on-surface">Export Data (JSON)</span>
                     </button>
-                    <button 
-                        className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl border border-error/30 text-error font-label-caps text-label-caps hover:bg-error/5 transition-colors cursor-pointer active:scale-95 transition-transform font-bold"
+                    <button
+                        className="w-full py-md px-lg rounded-xl glass-card flex items-center justify-center gap-md border border-error/30 hover:bg-error-container/10 transition-colors group cursor-pointer active:scale-95"
                         onClick={handleResetRequest}
                     >
-                        <span className="material-symbols-outlined text-lg">delete_forever</span>
-                        Reset All Data
+                        <span className="material-symbols-outlined text-error">delete_sweep</span>
+                        <span className="font-label-caps text-label-caps text-error">Reset All Data</span>
                     </button>
                 </section>
             </div>
@@ -1337,6 +1393,7 @@ function App() {
     };
 
     const renderPetrolEntry = () => {
+
         const estTotal = (parseFloat(litres) || 0) * (parseFloat(pricePerLitre) || 0);
         const hasLowDistance = totalKmSinceLastFill > 0 && totalKmSinceLastFill < 100;
         const litrePercent = Math.min(((parseFloat(litres) || 0) / 60) * 100, 100);

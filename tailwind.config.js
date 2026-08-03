@@ -75,6 +75,7 @@ module.exports = {
         "base": "4px",
         "2xl": "48px",
         "xs": "8px",
+        "xl": "40px",
         "element-gap": "16px",
         "container-padding": "20px",
         "section-margin": "40px",
@@ -82,17 +83,18 @@ module.exports = {
       },
       fontFamily: {
         "display-lg": ["Manrope"],
-        "headline-lg": ["Manrope"],
-        "headline-md": ["Manrope"],
+        "headline-lg": ["Hanken Grotesk", "Manrope"],
+        "headline-md": ["Hanken Grotesk", "Manrope"],
         "body-lg": ["Manrope"],
         "stats-xl": ["Manrope"],
         "headline-lg-mobile": ["Manrope"],
         "label-md": ["Manrope"],
         "label-sm": ["Manrope"],
-        "body-md": ["Manrope"],
-        "label-caps": ["Manrope"],
+        "body-md": ["Hanken Grotesk", "Manrope"],
+        "label-caps": ["JetBrains Mono", "Manrope"],
+        "data-lg": ["JetBrains Mono", "Manrope"],
         "stats-numeral": ["Manrope"],
-        "display-hero": ["Manrope"]
+        "display-hero": ["Hanken Grotesk", "Manrope"]
       },
       fontSize: {
         "display-lg": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "800" }],

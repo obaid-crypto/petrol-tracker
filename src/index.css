@@ -360,3 +360,76 @@
 .glow-teal {
   box-shadow: 0 0 20px rgba(109, 233, 190, 0.15);
 }
+
+/* ─── Fare Calculator Premium Styles ─────────────────────────────── */
+
+.calc-glass-panel {
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.05);
+  border-radius: 20px;
+}
+
+.calc-input-glow:focus-within {
+  box-shadow: 0 0 15px rgba(45, 232, 168, 0.3);
+  border-color: rgba(45, 232, 168, 0.4) !important;
+}
+
+.btn-coral-calc {
+  background: linear-gradient(135deg, #FF6B9D 0%, #FF3D6E 100%);
+  box-shadow: 0 4px 15px rgba(255, 61, 110, 0.4);
+  transition: transform 0.1s ease, filter 0.2s ease;
+}
+
+.btn-coral-calc:active {
+  transform: scale(0.95);
+}
+
+.btn-coral-calc:hover {
+  filter: brightness(1.1);
+}
+
+@keyframes calc-slide-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.calc-stagger-in {
+  opacity: 0;
+  animation: calc-slide-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes calc-spring-expand {
+  from { opacity: 0; transform: scaleY(0.6); }
+  to   { opacity: 1; transform: scaleY(1); }
+}
+
+.calc-result-reveal {
+  transform-origin: top;
+  animation: calc-spring-expand 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+@keyframes calc-pulse-banner {
+  0%   { opacity: 0.8; }
+  50%  { opacity: 1; transform: scale(1.01); }
+  100% { opacity: 0.8; }
+}
+
+.calc-pulse-banner {
+  animation: calc-pulse-banner 2s infinite ease-in-out;
+}
+
+.calc-bar-fill {
+  transition: width 1.5s cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+.calc-bar-fill-v {
+  transition: height 2s cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+.calc-accent-glow {
+  box-shadow: 0 0 40px rgba(45, 232, 168, 0.08);
+}
+

@@ -153,20 +153,20 @@ function App() {
 
         switch (error.code) {
             case error.PERMISSION_DENIED:
-                message = '❌ GPS Permission Denied\n\nGo to Settings → Site Settings → Location';
+                message = 'âŒ GPS Permission Denied\n\nGo to Settings â†’ Site Settings â†’ Location';
                 status = 'Permission Denied';
                 break;
             case error.POSITION_UNAVAILABLE:
-                message = '📡 No GPS Signal\n\n• Move outdoors\n• Check if Location is ON';
+                message = 'ðŸ“¡ No GPS Signal\n\nâ€¢ Move outdoors\nâ€¢ Check if Location is ON';
                 status = 'No Signal';
                 break;
             case error.TIMEOUT:
-                message = '⏱️ GPS Timeout - Retrying...';
+                message = 'â±ï¸ GPS Timeout - Retrying...';
                 status = 'Searching...';
                 setGpsDebug(prev => ({ ...prev, status }));
                 return;
             default:
-                message = '⚠️ GPS Error: ' + error.message;
+                message = 'âš ï¸ GPS Error: ' + error.message;
                 status = 'Error';
         }
 
@@ -196,7 +196,7 @@ function App() {
             lastLng: position.coords.longitude,
             accuracy: position.coords.accuracy,
             speed: position.coords.speed || 0,
-            status: 'Active ✓',
+            status: 'Active âœ“',
             lastDistance: 0
         });
 
@@ -278,7 +278,7 @@ function App() {
                 setCurrentTrip(null);
                 setIsTracking(false);
                 setGpsDebug(prev => ({ ...prev, status: 'Stopped', speed: 0 }));
-                showGpsMessage('⏸️ Personal Trip Stopped', false);
+                showGpsMessage('â¸ï¸ Personal Trip Stopped', false);
             }
         }
 
@@ -384,7 +384,7 @@ function App() {
                         lastSaved: new Date().toISOString()
                     };
                     localStorage.setItem('petrolTrackerData', JSON.stringify(trimmedData));
-                    alert('⚠️ Storage full! Trimmed old data');
+                    alert('âš ï¸ Storage full! Trimmed old data');
                 } else {
                     console.error('Storage error:', error);
                 }
@@ -424,7 +424,7 @@ function App() {
     useEffect(() => {
         const handleBackButton = () => {
             if (isTracking) {
-                const confirmStop = window.confirm('⚠️ Trip is running!\n\nStop trip and go back?');
+                const confirmStop = window.confirm('âš ï¸ Trip is running!\n\nStop trip and go back?');
                 if (confirmStop) {
                     stopTrip();
                 } else {
@@ -482,7 +482,7 @@ function App() {
         localStorage.removeItem('petrolTrackerData');
         setShowResetConfirm(false);
         setActiveScreen('dashboard');
-        alert('✅ All data reset!');
+        alert('âœ… All data reset!');
     };
 
     const cancelReset = () => {
@@ -530,7 +530,7 @@ function App() {
         a.download = `petrol-tracker-${new Date().toISOString().split('T')[0]}.json`;
         a.click();
         URL.revokeObjectURL(url);
-        alert('✅ Data exported successfully!');
+        alert('âœ… Data exported successfully!');
     };
 
     // ==========================================
@@ -542,17 +542,17 @@ function App() {
         const priceNum = parseFloat(pricePerLitre);
 
         if (isNaN(litresNum) || !isFinite(litresNum) || litresNum <= 0) {
-            alert('❌ Please enter valid litres!');
+            alert('âŒ Please enter valid litres!');
             return;
         }
 
         if (isNaN(priceNum) || !isFinite(priceNum) || priceNum <= 0) {
-            alert('❌ Please enter valid price!');
+            alert('âŒ Please enter valid price!');
             return;
         }
 
         if (!fillDate) {
-            alert('❌ Please select a date!');
+            alert('âŒ Please select a date!');
             return;
         }
 
@@ -586,12 +586,12 @@ function App() {
 
         if (isShortTank) {
             const rollingAvg = calculateRollingAverage([entry, ...petrolEntries]);
-            alert(`⚠️ Short tank detected (${totalKmSinceLastFill.toFixed(1)} km)\n\n` +
+            alert(`âš ï¸ Short tank detected (${totalKmSinceLastFill.toFixed(1)} km)\n\n` +
                 `Tank mileage: ${tankMileage} km/L (estimated)\n` +
                 (rollingAvg > 0 ? `Using 5-fill average (${rollingAvg.toFixed(2)} km/L) for calculations.\n\n` : '\n') +
-                `✅ Entry saved!`);
+                `âœ… Entry saved!`);
         } else {
-            alert('✅ Petrol entry saved!');
+            alert('âœ… Petrol entry saved!');
         }
 
         setActiveScreen('dashboard');
@@ -608,12 +608,12 @@ function App() {
     const saveManualKm = () => {
         const kmNum = parseFloat(manualKm);
         if (isNaN(kmNum) || !isFinite(kmNum) || kmNum <= 0) {
-            alert('❌ Please enter valid kilometers!');
+            alert('âŒ Please enter valid kilometers!');
             return;
         }
 
         if (kmNum > 1000) {
-            const confirmed = window.confirm('⚠️ You entered ' + kmNum + ' km.\n\nThis seems very high. Continue?');
+            const confirmed = window.confirm('âš ï¸ You entered ' + kmNum + ' km.\n\nThis seems very high. Continue?');
             if (!confirmed) return;
         }
 
@@ -632,7 +632,7 @@ function App() {
         setTrips(prev => [...prev, manualTrip]);
         setManualKm('');
         setShowManualEntry(false);
-        alert('✅ ' + roundedKm + ' km added!');
+        alert('âœ… ' + roundedKm + ' km added!');
     };
 
     const cancelManualEntry = () => {
@@ -654,17 +654,17 @@ function App() {
         const tipNum = parseFloat(rideTip) || 0;
 
         if (isNaN(kmNum) || !isFinite(kmNum) || kmNum <= 0) {
-            alert('❌ Please enter valid kilometers!');
+            alert('âŒ Please enter valid kilometers!');
             return;
         }
 
         if (isNaN(earningsNum) || !isFinite(earningsNum) || earningsNum < 0) {
-            alert('❌ Please enter valid earnings!');
+            alert('âŒ Please enter valid earnings!');
             return;
         }
 
         if (kmNum > 500) {
-            const confirmed = window.confirm('⚠️ You entered ' + kmNum + ' km.\n\nThis seems very high. Continue?');
+            const confirmed = window.confirm('âš ï¸ You entered ' + kmNum + ' km.\n\nThis seems very high. Continue?');
             if (!confirmed) return;
         }
 
@@ -728,15 +728,15 @@ function App() {
             ? `(using 5-fill avg: ${effectiveMileageData.mileage.toFixed(2)} km/L)`
             : `(using current tank: ${effectiveMileageData.mileage.toFixed(2)} km/L)`;
 
-        alert(`✅ Ride Saved!\n\n` +
+        alert(`âœ… Ride Saved!\n\n` +
             `Distance: ${roundedKm} km\n` +
             `Base Fare: Rs. ${roundedEarnings}\n` +
-            (roundedTip > 0 ? `Tip: Rs. ${roundedTip} 🎁\n` : '') +
+            (roundedTip > 0 ? `Tip: Rs. ${roundedTip} ðŸŽ\n` : '') +
             `Total Earnings: Rs. ${totalEarnings.toFixed(2)}\n` +
             `Fuel Used: ${fuelUsed.toFixed(2)} L ${mileageInfo}\n` +
             `Fuel Cost: Rs. ${fuelCost.toFixed(2)}\n` +
-            `━━━━━━━━━━━━━━━\n` +
-            `💰 Profit: Rs. ${profit.toFixed(2)}\n` +
+            `â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”\n` +
+            `ðŸ’° Profit: Rs. ${profit.toFixed(2)}\n` +
             `Per KM: Rs. ${profitPerKm.toFixed(2)}/km`
         );
     };
@@ -758,12 +758,12 @@ function App() {
         const myPrice = parseFloat(calcMyPrice);
 
         if (isNaN(km) || km <= 0) {
-            alert('❌ Enter valid kilometers!');
+            alert('âŒ Enter valid kilometers!');
             return;
         }
 
         if (isNaN(offerPrice) || offerPrice < 0) {
-            alert('❌ Enter valid offer price!');
+            alert('âŒ Enter valid offer price!');
             return;
         }
 
@@ -830,7 +830,7 @@ function App() {
 
     const startGPSTracking = (isRideTrip = false) => {
         if (!navigator.geolocation) {
-            alert('❌ GPS not supported');
+            alert('âŒ GPS not supported');
             return;
         }
 
@@ -871,8 +871,8 @@ function App() {
             );
 
             const accuracyMode = highAccuracy ? 'High Accuracy' : 'Standard';
-            const tripType = isRideTrip ? '🚖 Ride' : '🏍️ Personal';
-            showGpsMessage('🟢 GPS Active (' + tripType + ' - ' + accuracyMode + ')', false);
+            const tripType = isRideTrip ? 'ðŸš– Ride' : 'ðŸï¸ Personal';
+            showGpsMessage('ðŸŸ¢ GPS Active (' + tripType + ' - ' + accuracyMode + ')', false);
             setGpsDebug(prev => ({ ...prev, status: 'Tracking ' + tripType + ' (' + accuracyMode + ')' }));
         };
 
@@ -906,7 +906,7 @@ function App() {
                             handleGPSError(retryError);
                             setIsTracking(false);
                             setCurrentTrip(null);
-                            alert('❌ GPS Failed\n\nEnable Location & go outdoors');
+                            alert('âŒ GPS Failed\n\nEnable Location & go outdoors');
                         },
                         {
                             enableHighAccuracy: false,
@@ -933,7 +933,7 @@ function App() {
         const tipNum = parseFloat(rideTip) || 0;
 
         if (isNaN(earningsNum) || !isFinite(earningsNum) || earningsNum < 0) {
-            alert('❌ Please enter valid earnings!');
+            alert('âŒ Please enter valid earnings!');
             return;
         }
 
@@ -994,15 +994,15 @@ function App() {
             ? `(using 5-fill avg: ${effectiveMileageData.mileage.toFixed(2)} km/L)`
             : `(using current tank: ${effectiveMileageData.mileage.toFixed(2)} km/L)`;
 
-        alert(`✅ Ride Completed!\n\n` +
+        alert(`âœ… Ride Completed!\n\n` +
             `Distance: ${actualKm.toFixed(2)} km\n` +
             `Base Fare: Rs. ${roundedEarnings}\n` +
-            (roundedTip > 0 ? `Tip: Rs. ${roundedTip} 🎁\n` : '') +
+            (roundedTip > 0 ? `Tip: Rs. ${roundedTip} ðŸŽ\n` : '') +
             `Total Earnings: Rs. ${totalEarnings.toFixed(2)}\n` +
             `Fuel Used: ${fuelUsed.toFixed(2)} L ${mileageInfo}\n` +
             `Fuel Cost: Rs. ${fuelCost.toFixed(2)}\n` +
-            `━━━━━━━━━━━━━━━\n` +
-            `💰 Net Profit: Rs. ${profit.toFixed(2)}\n` +
+            `â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”\n` +
+            `ðŸ’° Net Profit: Rs. ${profit.toFixed(2)}\n` +
             `Per KM: Rs. ${profitPerKm.toFixed(2)}/km`
         );
     };
@@ -1611,7 +1611,7 @@ function App() {
                         <main className="px-container-padding space-y-element-gap mt-4 max-w-md mx-auto">
                             {/* Trip Type Badge */}
                             <div className="w-full py-3 bg-gradient-to-r from-primary-container to-primary rounded-full flex items-center justify-center animate-pulse-record shadow-[0_0_20px_rgba(78,204,163,0.3)]">
-                                <span className="font-label-caps text-label-caps text-on-primary-container uppercase font-bold">🏍️ PERSONAL TRIP IN PROGRESS ({tripTimeText})</span>
+                                <span className="font-label-caps text-label-caps text-on-primary-container uppercase font-bold">ðŸï¸ PERSONAL TRIP IN PROGRESS ({tripTimeText})</span>
                             </div>
                             <section className="flex flex-col items-center justify-center py-6 w-full">
                                 <div className="relative w-full max-w-xs h-40 glass-card rounded-3xl flex items-center justify-center">
@@ -1636,7 +1636,7 @@ function App() {
                                     <div className="font-mono text-[11px] text-on-surface-variant flex gap-4">
                                         <span>Updates: {gpsDebug.updates}</span>
                                         <span>Accuracy: {gpsDebug.accuracy ? gpsDebug.accuracy.toFixed(0) : '8'}m</span>
-                                        <span className="ml-auto">LAT: {gpsDebug.lastLat ? gpsDebug.lastLat.toFixed(4) : '0.0000'}° N</span>
+                                        <span className="ml-auto">LAT: {gpsDebug.lastLat ? gpsDebug.lastLat.toFixed(4) : '0.0000'}Â° N</span>
                                     </div>
                                 </div>
                             </div>
@@ -1844,7 +1844,7 @@ function App() {
                                 {/* Active Trip Badge */}
                                 <div className="w-full ride-gradient rounded-full py-3 px-6 mt-6 flex items-center justify-center gap-3 animate-pulse shadow-[0_0_20px_rgba(118,75,162,0.4)]">
                                     <span className="material-symbols-outlined text-white" style={{ fontVariationSettings: "'FILL' 1" }}>local_taxi</span>
-                                    <span className="font-label-caps text-white tracking-widest font-bold">🚖 RIDE TRIP IN PROGRESS</span>
+                                    <span className="font-label-caps text-white tracking-widest font-bold">ðŸš– RIDE TRIP IN PROGRESS</span>
                                 </div>
                             </section>
 
@@ -1978,7 +1978,7 @@ function App() {
                                     <p className="font-stats-numeral text-primary text-[28px] font-bold">PKR {rideSummary.totalEarnings.toLocaleString('en-IN')}</p>
                                 </div>
                                 <div>
-                                    <p className="font-label-caps text-on-surface-variant text-[10px] uppercase font-bold">Tips 🎁</p>
+                                    <p className="font-label-caps text-on-surface-variant text-[10px] uppercase font-bold">Tips ðŸŽ</p>
                                     <p className="font-stats-numeral text-tertiary-container text-[28px] font-bold">PKR {rideSummary.totalTips.toLocaleString('en-IN')}</p>
                                 </div>
                                 <div className="col-span-2 pt-2 border-t border-white/5">
@@ -2054,9 +2054,7 @@ function App() {
     };
     const renderCalculator = () => {
         const effectiveMileageData = getEffectiveMileage(petrolEntries);
-        const costPerKm = petrolEntries.length > 0 && effectiveMileageData.mileage > 0
-            ? (petrolEntries[0].pricePerLitre / effectiveMileageData.mileage)
-            : 15; // default fallback cost per km
+
 
         return (
             <div className="w-full animate-zoom-in-fade">
@@ -2064,80 +2062,137 @@ function App() {
                 <header className="flex justify-between items-center w-full sticky top-0 z-50 bg-surface/10 backdrop-blur-md px-container-padding py-4 max-w-md mx-auto">
                     <div className="flex flex-col">
                         <h1 className="font-display-hero text-headline-md text-primary dark:text-primary tracking-tight font-extrabold" onClick={() => setActiveScreen('dashboard')} style={{ cursor: 'pointer' }}>Fare Calculator</h1>
-                        <p className="font-label-caps text-[10px] text-on-surface-variant/70 uppercase tracking-widest -mt-1 font-bold">Compare offers and negotiate better rates!</p>
+                        <p className="font-label-caps text-[10px] text-on-surface-variant/70 uppercase tracking-widest -mt-1 font-bold">Compare offers Ã‚Â· negotiate better rates</p>
                     </div>
                     <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 rounded-full overflow-hidden border border-white/10">
-                            <img 
-                                className="w-full h-full object-cover" 
-                                alt="Driver profile" 
-                                src="https://lh3.googleusercontent.com/aida-public/AB6AXuADqWXwzNBqr3QaDioTFJ7Y2mi-UFl6-7-z1cxqki1Io_bF1ymZJI8I8heuUCq7IWynvJC23JrEyTl8tEnsHbEQfUdTrTJ2Z92weowkgQ8jw-sYhiQzfb2Lhwn0DvMuK--2ua5p2Jcm2h2sfKkOVR1XmPoUdia5KorWNey6RLFc0qJw92mUtWgBnwkPFf-YMEdoH2TbRcO5X-iQFZ6CqkuLOwxggk31CVGrjfSJVPxuenQhWaTDNKvTLA" 
-                            />
+                        <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-primary/40">
+                            <img className="w-full h-full object-cover" alt="Driver profile" src="https://lh3.googleusercontent.com/aida-public/AB6AXuADqWXwzNBqr3QaDioTFJ7Y2mi-UFl6-7-z1cxqki1Io_bF1ymZJI8I8heuUCq7IWynvJC23JrEyTl8tEnsHbEQfUdTrTJ2Z92weowkgQ8jw-sYhiQzfb2Lhwn0DvMuK--2ua5p2Jcm2h2sfKkOVR1XmPoUdia5KorWNey6RLFc0qJw92mUtWgBnwkPFf-YMEdoH2TbRcO5X-iQFZ6CqkuLOwxggk31CVGrjfSJVPxuenQhWaTDNKvTLA" />
                         </div>
                     </div>
                 </header>
 
-                <main className="px-container-padding mt-6 space-y-6 max-w-md mx-auto pb-24">
-                    {/* Warning Card */}
+                <main className="px-container-padding mt-4 space-y-6 max-w-md mx-auto pb-32">
+
+                    {/* Warning Banner */}
                     {petrolEntries.length === 0 && (
-                        <div className="glass-card p-4 flex items-start gap-3 bg-tertiary-container/10 border border-tertiary/20">
-                            <span className="material-symbols-outlined text-tertiary">warning</span>
-                            <p className="font-body-md text-sm text-tertiary-fixed font-semibold">⚠️ Add fuel data first for accurate calculations.</p>
+                        <div className="calc-glass-panel calc-pulse-banner py-3 px-5 flex items-center gap-3" style={{ border: '1px solid rgba(245,158,11,0.3)', background: 'rgba(245,158,11,0.08)' }}>
+                            <span className="material-symbols-outlined text-yellow-400 text-xl" style={{ fontVariationSettings: "'FILL' 1" }}>warning</span>
+                            <p className="font-label-caps text-[11px] font-bold tracking-widest text-yellow-400">ADD FUEL DATA FIRST</p>
                         </div>
                     )}
 
-                    {/* Calculator Form */}
-                    <div className="space-y-4">
-                        <div className="relative">
-                            <label className="block font-label-caps text-on-surface-variant mb-2 ml-1 font-bold uppercase">DISTANCE (KM)</label>
-                            <input 
-                                className="w-full bg-surface-container-highest/40 border border-white/5 rounded-xl py-5 px-6 font-stats-numeral text-headline-md text-primary focus:ring-2 focus:ring-primary/30 calc-input transition-all placeholder:opacity-20 text-center outline-none" 
-                                placeholder="0.0" 
-                                type="number"
-                                value={calcKm}
-                                onChange={(e) => setCalcKm(e.target.value)}
-                            />
-                        </div>
-                        <div className="relative">
-                            <label className="block font-label-caps text-on-surface-variant mb-2 ml-1 font-bold uppercase">CUSTOMER OFFER (PKR)</label>
-                            <input 
-                                className="w-full bg-surface-container-highest/40 border border-white/5 rounded-xl py-5 px-6 font-stats-numeral text-headline-md text-secondary focus:ring-2 focus:ring-secondary/30 calc-input transition-all placeholder:opacity-20 text-center outline-none" 
-                                placeholder="0" 
-                                type="number"
-                                value={calcOffer}
-                                onChange={(e) => setCalcOffer(e.target.value)}
-                            />
-                        </div>
-                        <div className="relative">
-                            <label className="block font-label-caps text-on-surface-variant mb-2 ml-1 flex justify-between font-bold uppercase">
-                                YOUR COUNTER OFFER (PKR)
-                                <span className="text-[10px] text-on-surface-variant/40">OPTIONAL</span>
-                            </label>
-                            <input 
-                                className="w-full bg-surface-container-highest/40 border border-white/5 rounded-xl py-5 px-6 font-stats-numeral text-headline-md text-secondary-fixed-dim focus:ring-2 focus:ring-secondary-fixed-dim/30 calc-input transition-all placeholder:opacity-20 text-center outline-none" 
-                                placeholder="0" 
-                                type="number"
-                                value={calcMyPrice}
-                                onChange={(e) => setCalcMyPrice(e.target.value)}
-                            />
-                        </div>
-                    </div>
+                    {/* Inputs Card */}
+                    <section className="calc-glass-panel p-6 space-y-7 calc-stagger-in" style={{ animationDelay: '100ms' }}>
+                        <h2 className="font-headline-md text-on-surface flex items-center gap-2 font-bold text-lg">
+                            <span className="material-symbols-outlined text-primary">calculate</span>
+                            Fare Estimator
+                        </h2>
 
-                    {/* Action Buttons */}
-                    <div className="flex gap-4">
-                        <button 
-                            className="flex-1 py-4 rounded-full font-label-caps text-white gradient-primary shadow-lg active:scale-95 transition-all duration-200 uppercase font-bold cursor-pointer hover:brightness-110"
-                            onClick={calculateFare}
-                        >
-                            CALCULATE
-                        </button>
-                        <button 
-                            className="flex-1 py-4 rounded-full font-label-caps text-on-surface-variant border border-white/10 hover:bg-white/5 active:scale-95 transition-all duration-200 uppercase font-bold cursor-pointer"
-                            onClick={clearCalculator}
-                        >
-                            CLEAR
-                        </button>
-                    </div>
+                        <div className="space-y-5">
+
+                            {/* Distance Input */}
+                            <div className="space-y-2">
+                                <label className="block font-label-caps text-[11px] text-on-surface-variant px-1 font-bold tracking-widest uppercase">Total Distance</label>
+                                <div className="relative flex items-center calc-glass-panel p-1 calc-input-glow transition-all">
+                                    <button
+                                        className="p-2 hover:text-primary transition-colors text-on-surface-variant active:scale-95"
+                                        onClick={() => setCalcKm(v => String(Math.max(0, (parseFloat(v) || 0) - 1)))}
+                                    >
+                                        <span className="material-symbols-outlined">remove</span>
+                                    </button>
+                                    <input
+                                        className="w-full bg-transparent border-none text-center font-bold text-2xl text-primary focus:ring-0 outline-none"
+                                        placeholder="0.0"
+                                        type="number"
+                                        value={calcKm}
+                                        onChange={(e) => setCalcKm(e.target.value)}
+                                    />
+                                    <span className="absolute right-12 text-xs font-bold text-on-surface-variant pointer-events-none">KM</span>
+                                    <button
+                                        className="p-2 hover:text-primary transition-colors text-on-surface-variant active:scale-95"
+                                        onClick={() => setCalcKm(v => String((parseFloat(v) || 0) + 1))}
+                                    >
+                                        <span className="material-symbols-outlined">add</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Customer Offer */}
+                            <div className="space-y-2">
+                                <label className="block font-label-caps text-[11px] text-on-surface-variant px-1 font-bold tracking-widest uppercase">Customer Offer</label>
+                                <div className="relative flex items-center calc-glass-panel p-1 calc-input-glow transition-all">
+                                    <button
+                                        className="p-2 hover:text-primary transition-colors text-on-surface-variant active:scale-95"
+                                        onClick={() => setCalcOffer(v => String(Math.max(0, (parseFloat(v) || 0) - 10)))}
+                                    >
+                                        <span className="material-symbols-outlined">remove</span>
+                                    </button>
+                                    <input
+                                        className="w-full bg-transparent border-none text-center font-bold text-2xl focus:ring-0 outline-none"
+                                        style={{ color: '#FF6B9D' }}
+                                        placeholder="0"
+                                        type="number"
+                                        value={calcOffer}
+                                        onChange={(e) => setCalcOffer(e.target.value)}
+                                    />
+                                    <span className="absolute right-12 text-xs font-bold text-on-surface-variant pointer-events-none">PKR</span>
+                                    <button
+                                        className="p-2 hover:text-primary transition-colors text-on-surface-variant active:scale-95"
+                                        onClick={() => setCalcOffer(v => String((parseFloat(v) || 0) + 10))}
+                                    >
+                                        <span className="material-symbols-outlined">add</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Counter Offer */}
+                            <div className="space-y-2">
+                                <label className="block font-label-caps text-[11px] text-on-surface-variant px-1 font-bold tracking-widest uppercase flex justify-between">
+                                    <span>Counter Offer</span>
+                                    <span className="text-[10px] text-on-surface-variant/40 normal-case font-normal tracking-normal">Optional</span>
+                                </label>
+                                <div className="relative flex items-center calc-glass-panel p-1 calc-input-glow transition-all">
+                                    <button
+                                        className="p-2 hover:text-primary transition-colors text-on-surface-variant active:scale-95"
+                                        onClick={() => setCalcMyPrice(v => String(Math.max(0, (parseFloat(v) || 0) - 10)))}
+                                    >
+                                        <span className="material-symbols-outlined">remove</span>
+                                    </button>
+                                    <input
+                                        className="w-full bg-transparent border-none text-center font-bold text-2xl text-yellow-400 focus:ring-0 outline-none"
+                                        placeholder="0"
+                                        type="number"
+                                        value={calcMyPrice}
+                                        onChange={(e) => setCalcMyPrice(e.target.value)}
+                                    />
+                                    <span className="absolute right-12 text-xs font-bold text-on-surface-variant pointer-events-none">PKR</span>
+                                    <button
+                                        className="p-2 hover:text-primary transition-colors text-on-surface-variant active:scale-95"
+                                        onClick={() => setCalcMyPrice(v => String((parseFloat(v) || 0) + 10))}
+                                    >
+                                        <span className="material-symbols-outlined">add</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="flex flex-col sm:flex-row gap-4 pt-2">
+                            <button
+                                className="flex-1 btn-coral-calc py-5 rounded-full font-bold text-white tracking-wide flex items-center justify-center gap-3 cursor-pointer"
+                                onClick={calculateFare}
+                            >
+                                <span className="material-symbols-outlined">analytics</span>
+                                CALCULATE FARE
+                            </button>
+                            <button
+                                className="px-8 py-5 rounded-full border border-white/10 hover:bg-white/5 font-label-caps text-[11px] text-on-surface-variant transition-all tracking-widest cursor-pointer active:scale-95"
+                                onClick={clearCalculator}
+                            >
+                                CLEAR ALL
+                            </button>
+                        </div>
+                    </section>
 
                     {/* Results Panel */}
                     {calculationResult && (
@@ -2146,14 +2201,14 @@ function App() {
                                 <h2 className="font-label-caps text-on-surface-variant tracking-[0.2em] font-bold">CALCULATION RESULT</h2>
                                 <div className="inline-flex mt-2 px-3 py-1 bg-surface-container-high rounded-full border border-white/5">
                                     <span className="font-label-caps text-[10px] text-primary font-bold">
-                                        Using {effectiveMileageData.mileage.toFixed(1)} km/L ({effectiveMileageData.source})
+                                        Using {effectiveMileageData.mileage > 0 ? effectiveMileageData.mileage.toFixed(1) : '~'} km/L ({effectiveMileageData.source})
                                     </span>
                                 </div>
                             </div>
 
                             {/* Verdict Banner */}
                             <div className={`border rounded-full py-3 px-6 flex items-center justify-center gap-2 ${
-                                calculationResult.offerProfit > 100 
+                                calculationResult.offerProfit > 100
                                     ? 'bg-primary/10 border-primary/20 text-primary'
                                     : calculationResult.offerProfit > 0
                                         ? 'bg-tertiary-container/10 border-tertiary/20 text-tertiary'
@@ -2163,10 +2218,10 @@ function App() {
                                     {calculationResult.offerProfit > 100 ? 'check_circle' : calculationResult.offerProfit > 0 ? 'info' : 'warning'}
                                 </span>
                                 <span className="font-label-caps text-xs font-bold">
-                                    {calculationResult.offerProfit > 100 
-                                        ? 'Good deal! Customer offer is profitable.' 
-                                        : calculationResult.offerProfit > 0 
-                                            ? 'Fair deal! Counter offer recommended.' 
+                                    {calculationResult.offerProfit > 100
+                                        ? 'Good deal! Customer offer is profitable.'
+                                        : calculationResult.offerProfit > 0
+                                            ? 'Fair deal! Counter offer recommended.'
                                             : 'Bad deal! Customer offer is not profitable.'}
                                 </span>
                             </div>
@@ -2176,7 +2231,7 @@ function App() {
                                 <div className="glass-card p-4 border-l-4 border-l-[#F5576C] bg-surface-container-low rounded-xl">
                                     <div className="flex justify-between items-center mb-2">
                                         <span className="font-label-caps text-[10px] text-on-surface-variant font-bold">FUEL COST</span>
-                                        <span className="font-stats-numeral text-sm text-[#F5576C] font-bold">PKR {costPerKm.toFixed(2)}/km</span>
+                                        <span className="font-stats-numeral text-sm text-[#F5576C] font-bold">PKR {calculationResult.costPerKm.toFixed(2)}/km</span>
                                     </div>
                                     <div className="flex justify-between items-end">
                                         <span className="font-body-md text-on-surface/60 font-semibold">Total Trip Fuel</span>
@@ -2198,7 +2253,7 @@ function App() {
                                     </div>
                                 </div>
 
-                                {/* Counter Offer Box (Conditional State) */}
+                                {/* Counter Offer Box */}
                                 {calculationResult.myPrice > 0 && (
                                     <div className="glass-card p-4 border-l-4 border-l-secondary bg-surface-container-low glow-violet rounded-xl">
                                         <h3 className="font-label-caps text-[10px] text-on-surface-variant mb-3 uppercase font-bold">Your Counter: PKR {calculationResult.myPrice}</h3>
@@ -2491,7 +2546,7 @@ function App() {
                             {/* Header Section */}
                             <div className="text-center mb-stack-margin relative z-10">
                                 <h1 className="font-headline-md text-headline-md text-on-surface mb-2">
-                                    ✏️ Add Manual KM
+                                    âœï¸ Add Manual KM
                                 </h1>
                                 <p className="font-body-md text-body-md text-on-surface-variant max-w-[240px] mx-auto">
                                     Enter distance when someone else rode.
@@ -2571,7 +2626,7 @@ function App() {
                             {/* Header Section */}
                             <div className="px-8 pt-8 pb-6 border-b border-white/5 relative z-10">
                                 <div className="flex justify-between items-start mb-2">
-                                    <h1 className="font-headline-md text-headline-md text-on-surface">🚖 Add Ride Manually</h1>
+                                    <h1 className="font-headline-md text-headline-md text-on-surface">ðŸš– Add Ride Manually</h1>
                                     <button 
                                         className="text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
                                         onClick={cancelRideEntry}
@@ -2622,7 +2677,7 @@ function App() {
                                 {/* Tip Input (Optional) */}
                                 <div className="space-y-2">
                                     <label className="font-label-caps text-label-caps text-on-surface-variant flex justify-between items-center block uppercase tracking-wider">
-                                        Tip (Optional 🎁)
+                                        Tip (Optional ðŸŽ)
                                         <span className="text-[10px] bg-secondary-container/30 px-2 py-0.5 rounded text-secondary font-bold">OPTIONAL</span>
                                     </label>
                                     <div className="relative group">
@@ -2646,7 +2701,7 @@ function App() {
                                     className="ride-gradient w-full py-4 rounded-xl font-headline-md text-white flex items-center justify-center gap-2 shadow-lg active:scale-[0.98] transition-all hover:brightness-110 cursor-pointer font-bold"
                                     onClick={saveRideEntry}
                                 >
-                                    <span>✅ Save Ride & Profit</span>
+                                    <span>âœ… Save Ride & Profit</span>
                                 </button>
                                 <button 
                                     className="w-full py-2 font-body-md text-on-surface-variant hover:text-on-surface transition-colors active:opacity-60 cursor-pointer"

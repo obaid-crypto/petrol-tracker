@@ -32,6 +32,8 @@ function App() {
     const [manualKm, setManualKm] = useState('');
 
     const [showRideEntry, setShowRideEntry] = useState(false);
+    const [earningsView, setEarningsView] = useState('daily');
+    const [expandedDay, setExpandedDay] = useState(null);
     const [rideKm, setRideKm] = useState('');
     const [rideEarnings, setRideEarnings] = useState('');
     const [rideTip, setRideTip] = useState('');
@@ -346,7 +348,15 @@ function App() {
                     setTrips(data.trips || []);
                     setCurrentTrip(data.currentTrip || null);
                     setTotalKmSinceLastFill(data.totalKmSinceLastFill || 0);
-                    setRideEntries(data.rideEntries || []);
+
+                    // Clear ride data from previous months automatically
+                    const nowMonth = new Date().getMonth();
+                    const nowYear = new Date().getFullYear();
+                    const filteredRides = (data.rideEntries || []).filter(r => {
+                        const d = new Date(r.date);
+                        return d.getMonth() === nowMonth && d.getFullYear() === nowYear;
+                    });
+                    setRideEntries(filteredRides);
                 }
             } catch (error) {
                 console.error('Error loading data:', error);
@@ -1395,15 +1405,8 @@ function App() {
     const renderPetrolEntry = () => {
 
         const estTotal = (parseFloat(litres) || 0) * (parseFloat(pricePerLitre) || 0);
-        const hasLowDistance = totalKmSinceLastFill > 0 && totalKmSinceLastFill < 100;
         const litrePercent = Math.min(((parseFloat(litres) || 0) / 60) * 100, 100);
         const litreGaugeDashoffset = 100 - litrePercent;
-
-        const activeMileageForRange = getEffectiveMileage(petrolEntries).mileage || 45;
-        const lastLitresForRange = petrolEntries.length > 0 ? petrolEntries[0].litres : 10;
-        const estimatedRange = lastLitresForRange * activeMileageForRange;
-        const kmRemaining = Math.max(0, estimatedRange - totalKmSinceLastFill);
-        const isRangeCritical = kmRemaining < 50 && kmRemaining >= 0;
 
         return (
             <div className="w-full">
@@ -1449,36 +1452,7 @@ function App() {
                         </div>
                     </div>
 
-                    {/* Range / Low Distance Alert */}
-                    {(isRangeCritical || hasLowDistance) && (
-                        <div className="glass-card rounded-xl flex items-center p-4 border-l-4 border-l-secondary animate-zoom-in-fade" style={{ boxShadow: '0 4px 20px rgba(0,0,0,0.3)' }}>
-                            <div className="w-2 h-2 rounded-full bg-secondary mr-3 flex-shrink-0 animate-pulse-record"></div>
-                            <span className="material-symbols-outlined text-secondary mr-3 flex-shrink-0">route</span>
-                            <div className="flex flex-col">
-                                <span className="text-[13px] font-bold text-on-surface">Range Critical</span>
-                                <span className="text-[11px] text-on-surface-variant">
-                                    {isRangeCritical
-                                        ? `Estimated ${kmRemaining.toFixed(0)} km remaining. Find nearest station.`
-                                        : `Low distance since last fill: ${totalKmSinceLastFill.toFixed(1)} km`}
-                                </span>
-                            </div>
-                        </div>
-                    )}
 
-                    {/* Trip Since Last Refuel Info */}
-                    <div className={`glass-card rounded-2xl p-4 border-l-4 ${hasLowDistance ? 'border-l-tertiary' : 'border-l-primary'} flex items-center gap-4 animate-pulse-subtle`}>
-                        <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                            <span className="material-symbols-outlined text-primary text-[18px]">distance</span>
-                        </div>
-                        <div>
-                            <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-0.5">
-                                {hasLowDistance ? "Low Distance Since Last Refuel" : "Trip Since Last Refuel"}
-                            </p>
-                            <p className="text-[14px] font-semibold text-on-surface">
-                                Distance: <span className="text-primary font-extrabold">{totalKmSinceLastFill.toFixed(1)} km</span>
-                            </p>
-                        </div>
-                    </div>
 
                     {/* Form Section */}
                     <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
@@ -1620,6 +1594,7 @@ function App() {
 
         // Check if personal trip tracking is active
         const isPersonalActive = isTracking && currentTrip && !currentTrip.isRide;
+        const isRideActiveInTracking = isTracking && currentTrip && currentTrip.isRide;
 
         return (
             <div className="w-full">
@@ -1727,8 +1702,61 @@ function App() {
                             </button>
                         </main>
                     </div>
+                ) : isRideActiveInTracking ? (
+                    /* layout when ride trip is active (RIDE TRIP IN PROGRESS) */
+                    <div className="w-full animate-zoom-in-fade">
+                        <main className="px-container-padding space-y-element-gap max-w-md mx-auto mt-4">
+                            {/* Speedometer Section */}
+                            <section className="flex flex-col items-center py-6 relative w-full">
+                                <div className="relative w-full max-w-xs h-40 glass-card rounded-3xl flex items-center justify-center">
+                                    <div className="flex flex-col items-center z-10">
+                                        <span className="font-display-hero text-[64px] text-white tracking-tighter leading-none font-extrabold">{roundedSpeed}</span>
+                                        <span className="font-label-caps text-on-surface-variant uppercase font-bold">km/h</span>
+                                    </div>
+                                </div>
+                                {/* Active Trip Badge */}
+                                <div className="w-full ride-gradient rounded-full py-3 px-6 mt-6 flex items-center justify-center gap-3 animate-pulse shadow-[0_0_20px_rgba(118,75,162,0.4)]">
+                                    <span className="material-symbols-outlined text-white" style={{ fontVariationSettings: "'FILL' 1" }}>local_taxi</span>
+                                    <span className="font-label-caps text-white tracking-widest font-bold">🚖 RIDE TRIP IN PROGRESS</span>
+                                </div>
+                            </section>
+
+                            {/* GPS & Trip Stats Grid */}
+                            <section className="grid grid-cols-2 gap-element-gap">
+                                <div className="col-span-2 glass-card rounded-xl p-4 flex items-center gap-3 border-l-4 border-secondary">
+                                    <span className="material-symbols-outlined text-secondary animate-pulse">gps_fixed</span>
+                                    <div>
+                                        <p className="font-label-caps text-[10px] text-on-surface-variant uppercase font-bold">Navigation System</p>
+                                        <p className="font-body-md text-on-surface">Tracking Ride (High Accuracy)</p>
+                                    </div>
+                                </div>
+                                <div className="glass-card rounded-xl p-4 border border-secondary/20 ride-glow">
+                                    <p className="font-label-caps text-on-surface-variant text-[11px] uppercase mb-1 font-bold">Current Ride</p>
+                                    <div className="flex items-baseline gap-1">
+                                        <span className="font-stats-numeral text-white text-[24px] font-bold">{distanceVal.toFixed(2)}</span>
+                                        <span className="text-on-surface-variant text-[12px] font-bold">km</span>
+                                    </div>
+                                </div>
+                                <div className="glass-card rounded-xl p-4 border border-secondary/20">
+                                    <p className="font-label-caps text-on-surface-variant text-[11px] uppercase mb-1 font-bold">Total Trip</p>
+                                    <div className="flex items-baseline gap-1">
+                                        <span className="font-stats-numeral text-white text-[24px] font-bold">{totalKmSinceLastFill.toFixed(1)}</span>
+                                        <span className="text-on-surface-variant text-[12px] font-bold">km</span>
+                                    </div>
+                                </div>
+                            </section>
+
+                            {/* Primary Controls */}
+                            <section className="pt-4">
+                                <button className="w-full bg-gradient-to-r from-red-500 to-rose-700 rounded-2xl py-5 flex items-center justify-center gap-3 text-white font-headline-md pulse-recording transition-transform active:scale-95 font-bold cursor-pointer" onClick={stopTrip}>
+                                    <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>stop_circle</span>
+                                    COMPLETE RIDE
+                                </button>
+                            </section>
+                        </main>
+                    </div>
                 ) : (
-                    /* layout before personal trip starts (START PERSONAL TRIP) */
+                    /* layout before any trip starts (IDLE STATE) */
                     <div className="w-full">
 
 
@@ -1736,8 +1764,8 @@ function App() {
                         <main className="w-full max-w-md px-container-padding mt-6 flex flex-col gap-element-gap mx-auto">
                             {/* Header Section */}
                             <section className="flex flex-col gap-1">
-                                <h1 className="font-headline-lg text-headline-lg text-on-surface font-bold">Private Mode</h1>
-                                <p className="font-body-md text-on-surface-variant">Your business data is hidden.</p>
+                                <h1 className="font-headline-lg text-headline-lg text-on-surface font-bold">Tracking</h1>
+                                <p className="font-body-md text-on-surface-variant">Track your personal and business trips.</p>
                             </section>
 
                             {/* Dynamic Map Background for Context */}
@@ -1771,13 +1799,27 @@ function App() {
                                     <span className="material-symbols-outlined text-on-surface-variant">add_circle</span>
                                     <span className="font-body-lg text-body-lg text-on-surface font-semibold">Add Manual KM</span>
                                 </button>
+                                <button 
+                                    className="w-full py-4 rounded-2xl ride-gradient flex items-center justify-center gap-2 shadow-[0_8px_32px_rgba(31,59,166,0.3)] hover:shadow-[0_12px_48px_rgba(185,195,255,0.3)] transition-all duration-300 active:scale-95 cursor-pointer"
+                                    onClick={() => startGPSTracking(true)}
+                                >
+                                    <span className="material-symbols-outlined text-on-primary text-xl">play_circle</span>
+                                    <span className="font-headline-md text-headline-md text-on-primary font-bold">Start Ride</span>
+                                </button>
+                                <button 
+                                    className="w-full py-4 rounded-2xl border border-white/10 glass-card flex items-center justify-center gap-2 hover:bg-white/5 transition-all active:scale-95 cursor-pointer"
+                                    onClick={() => setShowRideEntry(true)}
+                                >
+                                    <span className="material-symbols-outlined text-on-surface-variant">add_circle</span>
+                                    <span className="font-body-lg text-body-lg text-on-surface font-semibold">Manual Ride</span>
+                                </button>
                             </section>
 
                             {/* Info Tip */}
                             <div className="flex items-start gap-3 p-4 bg-surface-container-low/50 rounded-xl border border-white/5 mt-4">
                                 <span className="material-symbols-outlined text-primary/60 text-sm">info</span>
                                 <p className="font-body-md text-body-md text-on-surface-variant/80 italic text-sm">
-                                    In private mode, trip details are not synced to your business dashboard.
+                                    In private mode, trip details are not synced to your business dashboard. Use Start Ride and Manual Ride for business tracking.
                                 </p>
                             </div>
                         </main>
@@ -1789,16 +1831,9 @@ function App() {
 
     const renderRideTrip = () => {
         const rideSummary = getRideSummary;
-        const recentRides = rideEntries.slice(0, 5);
         const distanceVal = currentTrip ? currentTrip.distance : 0;
 
-        // Today's Goal logic
-        const todayStr = new Date().toDateString();
-        const todayEarnings = rideEntries
-            .filter(ride => new Date(ride.date).toDateString() === todayStr)
-            .reduce((sum, ride) => sum + (ride.totalEarnings || 0), 0);
-        const dailyGoal = 2000;
-        const goalPct = Math.min(100, Math.round((todayEarnings / dailyGoal) * 100));
+
 
 
 
@@ -1878,60 +1913,151 @@ function App() {
 
 
                         <main className="px-container-padding flex flex-col max-w-md mx-auto mt-6">
-                            {/* Welcome Header */}
+                            {/* Header */}
                             <div className="mb-6">
-                                <h1 className="font-display-hero text-headline-lg text-on-surface leading-tight font-extrabold">Ready to Earn?</h1>
-                                <p className="font-body-lg text-body-md text-on-surface-variant mt-2">Systems check complete. Your next ride is a tap away.</p>
+                                <h1 className="font-display-hero text-headline-lg text-on-surface leading-tight font-extrabold">Earning Details</h1>
+                                <p className="font-body-lg text-body-md text-on-surface-variant mt-2">Track your daily and monthly ride earnings.</p>
                             </div>
 
-                            {/* Pre-Flight Summary Bento */}
-                            <div className="grid grid-cols-2 gap-element-gap mb-6">
-                                {/* Earnings Goal Card */}
-                                <div className="col-span-2 glass-card rounded-xl p-5 flex flex-col gap-4">
-                                    <div className="flex justify-between items-center">
-                                        <span className="font-label-caps text-label-caps text-on-surface-variant font-bold uppercase">TODAY'S GOAL</span>
-                                        <span className="font-stats-numeral text-stats-numeral text-secondary font-bold">PKR {todayEarnings} / PKR {dailyGoal}</span>
-                                    </div>
-                                    <div className="h-2 w-full bg-white/10 rounded-full overflow-hidden">
-                                        <div className="h-full ride-gradient rounded-full shadow-[0_0_8px_#b9c3ff]" style={{ width: `${goalPct}%` }}></div>
-                                    </div>
-                                    <p className="font-body-md text-body-sm text-on-surface-variant/80 text-sm">
-                                        {goalPct}% reached. {goalPct >= 100 ? 'Goal achieved! Keep rolling.' : 'Keep driving to hit today\'s milestone.'}
-                                    </p>
-                                </div>
-                            </div>
-
-                            {/* Action Center */}
-                            <div className="space-y-4">
-                                <button 
-                                    className="w-full h-16 ride-gradient text-on-primary font-headline-md text-headline-md rounded-xl flex items-center justify-center gap-3 shadow-[0_8px_32px_rgba(31,59,166,0.4)] transition-all hover:scale-[1.02] active:scale-95 group overflow-hidden relative font-bold cursor-pointer"
-                                    onClick={() => startGPSTracking(true)}
+                            {/* Daily / Monthly Earnings Toggle */}
+                            <div className="flex gap-3 mb-6">
+                                <button
+                                    className={`flex-1 py-3 rounded-xl font-headline-md text-[14px] font-bold transition-all duration-300 active:scale-95 cursor-pointer ${
+                                        earningsView === 'daily'
+                                            ? 'primary-gradient text-on-primary shadow-[0_4px_16px_rgba(0,108,81,0.4)]'
+                                            : 'glass-card border border-white/10 text-on-surface-variant hover:bg-white/5'
+                                    }`}
+                                    onClick={() => setEarningsView('daily')}
                                 >
-                                    <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                                    <span className="material-symbols-outlined text-2xl">play_circle</span>
-                                    START RIDE
+                                    Daily Earnings
                                 </button>
-                                <button 
-                                    className="w-full h-14 bg-transparent border border-white/10 text-on-surface font-body-lg text-body-lg rounded-xl flex items-center justify-center gap-2 hover:bg-white/5 transition-all active:scale-95 cursor-pointer"
-                                    onClick={() => setShowRideEntry(true)}
+                                <button
+                                    className={`flex-1 py-3 rounded-xl font-headline-md text-[14px] font-bold transition-all duration-300 active:scale-95 cursor-pointer ${
+                                        earningsView === 'monthly'
+                                            ? 'primary-gradient text-on-primary shadow-[0_4px_16px_rgba(0,108,81,0.4)]'
+                                            : 'glass-card border border-white/10 text-on-surface-variant hover:bg-white/5'
+                                    }`}
+                                    onClick={() => setEarningsView('monthly')}
                                 >
-                                    <span className="material-symbols-outlined text-xl">add_circle</span>
-                                    Add Manual Ride
+                                    Monthly Earnings
                                 </button>
                             </div>
 
-                            {/* Visual Map Detail */}
-                            <div className="mt-8 relative h-32 w-full glass-card rounded-xl overflow-hidden grayscale opacity-40">
-                                <div className="absolute inset-0 w-full h-full" style={{ backgroundImage: "url('https://lh3.googleusercontent.com/aida-public/AB6AXuCy6LXnQMzJPeeNBOH9qUELd-6Q1dhqCVofQXjZDfaGUteEQMlEf3eJtGVqFbnBCv5XbIBws1VSUwbxhWDWC5WDDzHifYiqEOi8sy2Q47171m7AZwYkPpfEoqS2DtJwHSwUCpIJJlOjC7DFZB872Zc0JMURUB3-7k8Jvlcv-80Ia6MCA0TzKly1uDwDTCQF2svggWGdBZxBae2b_CmH-MCl9lyMTMk-ibOK--7rDomX99mMHCC8lD5zrw')" }}></div>
-                                <div className="absolute inset-0 bg-gradient-to-t from-surface-dim to-transparent"></div>
-                            </div>
+
+
+
+
                         </main>
                     </div>
                 )}
 
-                {/* August/Monthly Earnings Card */}
+                {/* Earnings Cards */}
                 {!isRideActive && (
                     <main className="px-container-padding max-w-md mx-auto mt-6">
+
+                        {/* Daily Earnings Card */}
+                        {earningsView === 'daily' && (() => {
+                            const todayStr = new Date().toDateString();
+                            const todayRides = rideEntries.filter(r => new Date(r.date).toDateString() === todayStr);
+                            const dailyTotalRides = todayRides.length;
+                            const dailyTotalKm = todayRides.reduce((s, r) => s + (r.km || 0), 0);
+                            const dailyGrossEarnings = todayRides.reduce((s, r) => s + (r.totalEarnings || 0), 0);
+                            const dailyTotalTips = todayRides.reduce((s, r) => s + (r.tip || 0), 0);
+                            const dailyFuelCost = todayRides.reduce((s, r) => s + (r.fuelCost || 0), 0);
+                            const dailyProfit = dailyGrossEarnings - dailyFuelCost;
+                            const dailyAvgProfitPerKm = dailyTotalKm > 0 ? dailyProfit / dailyTotalKm : 0;
+                            return (
+                                <section className="glass-card rounded-2xl p-6 border-t border-white/10">
+                                    <div className="flex justify-between items-center mb-6">
+                                        <h3 className="font-headline-md text-white font-bold">Today's Earnings</h3>
+                                        <span className="text-secondary font-label-caps font-bold">Today</span>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-y-6 gap-x-4">
+                                        <div>
+                                            <p className="font-label-caps text-on-surface-variant text-[10px] uppercase font-bold">Total Rides</p>
+                                            <p className="font-stats-numeral text-white text-[28px] font-bold">{dailyTotalRides}</p>
+                                        </div>
+                                        <div>
+                                            <p className="font-label-caps text-on-surface-variant text-[10px] uppercase font-bold">Distance</p>
+                                            <p className="font-stats-numeral text-white text-[28px] font-bold">{dailyTotalKm.toFixed(0)}<span className="text-[14px] ml-1">km</span></p>
+                                        </div>
+                                        <div>
+                                            <p className="font-label-caps text-on-surface-variant text-[10px] uppercase font-bold">Gross Earnings</p>
+                                            <p className="font-stats-numeral text-primary text-[28px] font-bold">PKR {dailyGrossEarnings.toLocaleString('en-IN')}</p>
+                                        </div>
+                                        <div>
+                                            <p className="font-label-caps text-on-surface-variant text-[10px] uppercase font-bold">Tips 🎁</p>
+                                            <p className="font-stats-numeral text-tertiary-container text-[28px] font-bold">PKR {dailyTotalTips.toLocaleString('en-IN')}</p>
+                                        </div>
+                                        <div className="col-span-2 pt-2 border-t border-white/5">
+                                            <p className="font-label-caps text-on-surface-variant text-[10px] uppercase mb-2 font-bold">Fuel Cost Offset</p>
+                                            <div className="flex items-center gap-2">
+                                                <div className="h-2 flex-1 bg-white/10 rounded-full overflow-hidden">
+                                                    <div 
+                                                        className="h-full bg-error" 
+                                                        style={{ width: `${dailyGrossEarnings > 0 ? Math.min(100, (dailyFuelCost / dailyGrossEarnings) * 100) : 0}%` }}
+                                                    ></div>
+                                                </div>
+                                                <span className="font-stats-numeral text-error text-[16px] font-bold">PKR {dailyFuelCost.toLocaleString('en-IN')}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {/* Daily Net Profit Tile */}
+                                    <div className="mt-8 p-5 bg-primary/10 border border-primary/20 rounded-2xl flex flex-col items-center justify-center text-center shadow-[inset_0_0_20px_rgba(109,233,190,0.1)]">
+                                        <p className="font-label-caps text-primary text-[12px] uppercase tracking-widest mb-1 font-bold">Net Daily Profit</p>
+                                        <p className="font-display-hero text-primary text-[38px] leading-tight font-extrabold">PKR {dailyProfit.toLocaleString('en-IN')}</p>
+                                        <p className="font-body-md text-on-surface-variant opacity-70 mt-1 font-semibold">PKR {dailyAvgProfitPerKm.toFixed(2)}/km efficiency</p>
+                                    </div>
+                                    {/* Today's Individual Rides */}
+                                    <section className="mt-6 space-y-3">
+                                        <h4 className="font-headline-md text-white font-bold text-[14px]">Today's Rides</h4>
+                                        {todayRides.length === 0 ? (
+                                            <div className="glass-card p-4 text-center text-on-surface-variant rounded-xl">
+                                                No rides logged today yet.
+                                            </div>
+                                        ) : (
+                                            todayRides.map(ride => (
+                                                <div key={ride.id} className="glass-card rounded-xl overflow-hidden border-l-4 border-secondary flex flex-col hover:bg-surface-container-high transition-colors">
+                                                    <div className="p-4 flex justify-between items-start">
+                                                        <div>
+                                                            <p className="font-label-caps text-on-surface-variant text-[11px] font-bold">
+                                                                {new Date(ride.date).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                                                            </p>
+                                                            <p className="font-body-lg text-white font-semibold">Ride Entry</p>
+                                                        </div>
+                                                        <div className="bg-primary/20 text-primary px-3 py-1 rounded-full font-label-caps text-[11px] font-bold">
+                                                            + PKR {ride.profit.toFixed(0)} PROFIT
+                                                        </div>
+                                                    </div>
+                                                    <div className="px-4 py-3 grid grid-cols-3 gap-2 bg-white/5">
+                                                        <div>
+                                                            <p className="text-[9px] text-on-surface-variant uppercase font-bold">Dist</p>
+                                                            <p className="text-[13px] font-semibold text-white">{ride.km.toFixed(1)}km</p>
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-[9px] text-on-surface-variant uppercase font-bold">Fare</p>
+                                                            <p className="text-[13px] font-semibold text-white">PKR {(ride.earnings + ride.tip).toFixed(0)}</p>
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-[9px] text-on-surface-variant uppercase font-bold">Fuel</p>
+                                                            <p className="text-[13px] font-semibold text-error">PKR {ride.fuelCost.toFixed(0)}</p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="px-4 py-2 border-t border-white/5 flex justify-between items-center text-[11px]">
+                                                        <span className="text-on-surface-variant font-medium">Profit: <span className="text-primary">PKR {ride.profitPerKm.toFixed(1)}/km</span></span>
+                                                        <span className="text-on-surface-variant font-medium">Cost: <span className="text-error">PKR {ride.costPerKm.toFixed(1)}/km</span></span>
+                                                    </div>
+                                                </div>
+                                            ))
+                                        )}
+                                    </section>
+                                </section>
+                            );
+                        })()}
+
+                        {/* Monthly Earnings Card */}
+                        {earningsView === 'monthly' && (
+                        <>
                         <section className="glass-card rounded-2xl p-6 border-t border-white/10">
                             <div className="flex justify-between items-center mb-6">
                                 <h3 className="font-headline-md text-white font-bold">
@@ -1977,51 +2103,129 @@ function App() {
                             </div>
                         </section>
 
-                        {/* Recent Rides List */}
+                        {/* Monthly Ride Summaries */}
                         <section className="space-y-4 pt-6 pb-20">
-                            <h3 className="font-headline-md text-white px-2 font-bold">Recent Rides</h3>
+                            <h3 className="font-headline-md text-white px-2 font-bold">Monthly Summary</h3>
                             <div className="space-y-sm">
-                                {recentRides.length === 0 ? (
-                                    <div className="glass-card p-lg text-center text-on-surface-variant rounded-xl">
-                                        No rides logged this month yet.
-                                    </div>
-                                ) : (
-                                    recentRides.map(ride => (
-                                        <div key={ride.id} className="glass-card rounded-xl overflow-hidden border-l-4 border-secondary flex flex-col hover:bg-surface-container-high transition-colors">
-                                            <div className="p-4 flex justify-between items-start">
-                                                <div>
-                                                    <p className="font-label-caps text-on-surface-variant text-[11px] font-bold">
-                                                        {new Date(ride.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }).toUpperCase()}, {new Date(ride.date).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
-                                                    </p>
-                                                    <p className="font-body-lg text-white font-semibold">Ride Entry</p>
-                                                </div>
-                                                <div className="bg-primary/20 text-primary px-3 py-1 rounded-full font-label-caps text-[11px] font-bold">
-                                                    + PKR {ride.profit.toFixed(0)} PROFIT
-                                                </div>
+                                {(() => {
+                                    // Group rides by date
+                                    const dailyMap = {};
+                                    rideEntries.forEach(ride => {
+                                        const dayKey = new Date(ride.date).toDateString();
+                                        if (!dailyMap[dayKey]) {
+                                            dailyMap[dayKey] = { date: ride.date, rides: [] };
+                                        }
+                                        dailyMap[dayKey].rides.push(ride);
+                                    });
+                                    const dailySummaries = Object.values(dailyMap).sort((a, b) => new Date(b.date) - new Date(a.date));
+
+                                    if (dailySummaries.length === 0) {
+                                        return (
+                                            <div className="glass-card p-lg text-center text-on-surface-variant rounded-xl">
+                                                No rides logged this month yet.
                                             </div>
-                                            <div className="px-4 py-3 grid grid-cols-3 gap-2 bg-white/5">
-                                                <div>
-                                                    <p className="text-[9px] text-on-surface-variant uppercase font-bold">Dist</p>
-                                                    <p className="text-[13px] font-semibold text-white">{ride.km.toFixed(1)}km</p>
+                                        );
+                                    }
+
+                                    return dailySummaries.map(day => {
+                                        const totalRides = day.rides.length;
+                                        const totalKm = day.rides.reduce((s, r) => s + (r.km || 0), 0);
+                                        const totalEarnings = day.rides.reduce((s, r) => s + (r.earnings || 0) + (r.tip || 0), 0);
+                                        const totalTips = day.rides.reduce((s, r) => s + (r.tip || 0), 0);
+                                        const totalFuelCost = day.rides.reduce((s, r) => s + (r.fuelCost || 0), 0);
+                                        const totalProfit = day.rides.reduce((s, r) => s + (r.profit || 0), 0);
+                                        const dateObj = new Date(day.date);
+                                        const dateLabel = dateObj.toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short' }).toUpperCase();
+
+                                        return (
+                                            <div 
+                                                key={dateObj.toDateString()} 
+                                                className="glass-card rounded-xl overflow-hidden border-l-4 border-secondary flex flex-col hover:bg-surface-container-high transition-colors cursor-pointer"
+                                                onClick={() => setExpandedDay(expandedDay === dateObj.toDateString() ? null : dateObj.toDateString())}
+                                            >
+                                                <div className="p-4 flex justify-between items-start">
+                                                    <div>
+                                                        <p className="font-label-caps text-on-surface-variant text-[11px] font-bold">{dateLabel}</p>
+                                                        <p className="font-body-lg text-white font-semibold">{totalRides} {totalRides === 1 ? 'Ride' : 'Rides'}</p>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="bg-primary/20 text-primary px-3 py-1 rounded-full font-label-caps text-[11px] font-bold">
+                                                            + PKR {totalProfit.toFixed(0)} PROFIT
+                                                        </div>
+                                                        <span className="material-symbols-outlined text-on-surface-variant text-[18px]">
+                                                            {expandedDay === dateObj.toDateString() ? 'expand_less' : 'expand_more'}
+                                                        </span>
+                                                    </div>
                                                 </div>
-                                                <div>
-                                                    <p className="text-[9px] text-on-surface-variant uppercase font-bold">Fare</p>
-                                                    <p className="text-[13px] font-semibold text-white">PKR {(ride.earnings + ride.tip).toFixed(0)}</p>
+                                                <div className="px-4 py-3 grid grid-cols-4 gap-2 bg-white/5">
+                                                    <div>
+                                                        <p className="text-[9px] text-on-surface-variant uppercase font-bold">Dist</p>
+                                                        <p className="text-[13px] font-semibold text-white">{totalKm.toFixed(1)}km</p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-[9px] text-on-surface-variant uppercase font-bold">Earnings</p>
+                                                        <p className="text-[13px] font-semibold text-white">PKR {totalEarnings.toFixed(0)}</p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-[9px] text-on-surface-variant uppercase font-bold">Tips</p>
+                                                        <p className="text-[13px] font-semibold text-tertiary-container">PKR {totalTips.toFixed(0)}</p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-[9px] text-on-surface-variant uppercase font-bold">Fuel</p>
+                                                        <p className="text-[13px] font-semibold text-error">PKR {totalFuelCost.toFixed(0)}</p>
+                                                    </div>
                                                 </div>
-                                                <div>
-                                                    <p className="text-[9px] text-on-surface-variant uppercase font-bold">Fuel</p>
-                                                    <p className="text-[13px] font-semibold text-error">PKR {ride.fuelCost.toFixed(0)}</p>
+                                                <div className="px-4 py-2 border-t border-white/5 flex justify-between items-center text-[11px]">
+                                                    <span className="text-on-surface-variant font-medium">Profit/km: <span className="text-primary">PKR {totalKm > 0 ? (totalProfit / totalKm).toFixed(1) : '0.0'}/km</span></span>
+                                                    <span className="text-on-surface-variant font-medium">Cost/km: <span className="text-error">PKR {totalKm > 0 ? (totalFuelCost / totalKm).toFixed(1) : '0.0'}/km</span></span>
                                                 </div>
+                                                
+                                                {/* Expanded Rides List */}
+                                                {expandedDay === dateObj.toDateString() && (
+                                                    <div className="bg-surface-dim/30 border-t border-white/5 p-4 space-y-3">
+                                                        {day.rides.map(ride => (
+                                                            <div key={ride.id} className="glass-card rounded-xl overflow-hidden border-l-4 border-secondary flex flex-col hover:bg-surface-container-high transition-colors">
+                                                                <div className="p-4 flex justify-between items-start">
+                                                                    <div>
+                                                                        <p className="font-label-caps text-on-surface-variant text-[11px] font-bold">
+                                                                            {new Date(ride.date).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                                                                        </p>
+                                                                        <p className="font-body-lg text-white font-semibold">Ride Entry</p>
+                                                                    </div>
+                                                                    <div className="bg-primary/20 text-primary px-3 py-1 rounded-full font-label-caps text-[11px] font-bold">
+                                                                        + PKR {ride.profit.toFixed(0)} PROFIT
+                                                                    </div>
+                                                                </div>
+                                                                <div className="px-4 py-3 grid grid-cols-3 gap-2 bg-white/5">
+                                                                    <div>
+                                                                        <p className="text-[9px] text-on-surface-variant uppercase font-bold">Dist</p>
+                                                                        <p className="text-[13px] font-semibold text-white">{ride.km.toFixed(1)}km</p>
+                                                                    </div>
+                                                                    <div>
+                                                                        <p className="text-[9px] text-on-surface-variant uppercase font-bold">Fare</p>
+                                                                        <p className="text-[13px] font-semibold text-white">PKR {(ride.earnings + ride.tip).toFixed(0)}</p>
+                                                                    </div>
+                                                                    <div>
+                                                                        <p className="text-[9px] text-on-surface-variant uppercase font-bold">Fuel</p>
+                                                                        <p className="text-[13px] font-semibold text-error">PKR {ride.fuelCost.toFixed(0)}</p>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="px-4 py-2 border-t border-white/5 flex justify-between items-center text-[11px]">
+                                                                    <span className="text-on-surface-variant font-medium">Profit: <span className="text-primary">PKR {ride.profitPerKm.toFixed(1)}/km</span></span>
+                                                                    <span className="text-on-surface-variant font-medium">Cost: <span className="text-error">PKR {ride.costPerKm.toFixed(1)}/km</span></span>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
                                             </div>
-                                            <div className="px-4 py-2 border-t border-white/5 flex justify-between items-center text-[11px]">
-                                                <span className="text-on-surface-variant font-medium">Profit: <span className="text-primary">PKR {ride.profitPerKm.toFixed(1)}/km</span></span>
-                                                <span className="text-on-surface-variant font-medium">Cost: <span class="text-error">PKR {ride.costPerKm.toFixed(1)}/km</span></span>
-                                            </div>
-                                        </div>
-                                    ))
-                                )}
+                                        );
+                                    });
+                                })()}
                             </div>
                         </section>
+                        </>
+                        )}
                     </main>
                 )}
             </div>

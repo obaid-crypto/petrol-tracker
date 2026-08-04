@@ -153,20 +153,20 @@ function App() {
 
         switch (error.code) {
             case error.PERMISSION_DENIED:
-                message = 'âŒ GPS Permission Denied\n\nGo to Settings â†’ Site Settings â†’ Location';
+                message = '❌ GPS Permission Denied\n\nGo to Settings → Site Settings → Location';
                 status = 'Permission Denied';
                 break;
             case error.POSITION_UNAVAILABLE:
-                message = 'ðŸ“¡ No GPS Signal\n\nâ€¢ Move outdoors\nâ€¢ Check if Location is ON';
+                message = '📡 No GPS Signal\n\n• Move outdoors\n• Check if Location is ON';
                 status = 'No Signal';
                 break;
             case error.TIMEOUT:
-                message = 'â±ï¸ GPS Timeout - Retrying...';
+                message = '⏱️ GPS Timeout - Retrying...';
                 status = 'Searching...';
                 setGpsDebug(prev => ({ ...prev, status }));
                 return;
             default:
-                message = 'âš ï¸ GPS Error: ' + error.message;
+                message = '⚠️ GPS Error: ' + error.message;
                 status = 'Error';
         }
 
@@ -196,7 +196,7 @@ function App() {
             lastLng: position.coords.longitude,
             accuracy: position.coords.accuracy,
             speed: position.coords.speed || 0,
-            status: 'Active âœ“',
+            status: 'Active ✔',
             lastDistance: 0
         });
 
@@ -278,7 +278,7 @@ function App() {
                 setCurrentTrip(null);
                 setIsTracking(false);
                 setGpsDebug(prev => ({ ...prev, status: 'Stopped', speed: 0 }));
-                showGpsMessage('â¸ï¸ Personal Trip Stopped', false);
+                showGpsMessage('⏸️ Personal Trip Stopped', false);
             }
         }
 
@@ -384,7 +384,7 @@ function App() {
                         lastSaved: new Date().toISOString()
                     };
                     localStorage.setItem('petrolTrackerData', JSON.stringify(trimmedData));
-                    alert('âš ï¸ Storage full! Trimmed old data');
+                    alert('⚠️ Storage full! Trimmed old data');
                 } else {
                     console.error('Storage error:', error);
                 }
@@ -424,7 +424,7 @@ function App() {
     useEffect(() => {
         const handleBackButton = () => {
             if (isTracking) {
-                const confirmStop = window.confirm('âš ï¸ Trip is running!\n\nStop trip and go back?');
+                const confirmStop = window.confirm('⚠️ Trip is running!\n\nStop trip and go back?');
                 if (confirmStop) {
                     stopTrip();
                 } else {
@@ -482,7 +482,7 @@ function App() {
         localStorage.removeItem('petrolTrackerData');
         setShowResetConfirm(false);
         setActiveScreen('dashboard');
-        alert('âœ… All data reset!');
+        alert('✅ All data reset!');
     };
 
     const cancelReset = () => {
@@ -530,7 +530,7 @@ function App() {
         a.download = `petrol-tracker-${new Date().toISOString().split('T')[0]}.json`;
         a.click();
         URL.revokeObjectURL(url);
-        alert('âœ… Data exported successfully!');
+        alert('✅ Data exported successfully!');
     };
 
     // ==========================================
@@ -542,17 +542,17 @@ function App() {
         const priceNum = parseFloat(pricePerLitre);
 
         if (isNaN(litresNum) || !isFinite(litresNum) || litresNum <= 0) {
-            alert('âŒ Please enter valid litres!');
+            alert('❌ Please enter valid litres!');
             return;
         }
 
         if (isNaN(priceNum) || !isFinite(priceNum) || priceNum <= 0) {
-            alert('âŒ Please enter valid price!');
+            alert('❌ Please enter valid price!');
             return;
         }
 
         if (!fillDate) {
-            alert('âŒ Please select a date!');
+            alert('❌ Please select a date!');
             return;
         }
 
@@ -586,12 +586,12 @@ function App() {
 
         if (isShortTank) {
             const rollingAvg = calculateRollingAverage([entry, ...petrolEntries]);
-            alert(`âš ï¸ Short tank detected (${totalKmSinceLastFill.toFixed(1)} km)\n\n` +
+            alert(`⚠️ Short tank detected (${totalKmSinceLastFill.toFixed(1)} km)\n\n` +
                 `Tank mileage: ${tankMileage} km/L (estimated)\n` +
                 (rollingAvg > 0 ? `Using 5-fill average (${rollingAvg.toFixed(2)} km/L) for calculations.\n\n` : '\n') +
-                `âœ… Entry saved!`);
+                `✅ Entry saved!`);
         } else {
-            alert('âœ… Petrol entry saved!');
+            alert('✅ Petrol entry saved!');
         }
 
         setActiveScreen('dashboard');
@@ -608,12 +608,12 @@ function App() {
     const saveManualKm = () => {
         const kmNum = parseFloat(manualKm);
         if (isNaN(kmNum) || !isFinite(kmNum) || kmNum <= 0) {
-            alert('âŒ Please enter valid kilometers!');
+            alert('❌ Please enter valid kilometers!');
             return;
         }
 
         if (kmNum > 1000) {
-            const confirmed = window.confirm('âš ï¸ You entered ' + kmNum + ' km.\n\nThis seems very high. Continue?');
+            const confirmed = window.confirm('⚠️ You entered ' + kmNum + ' km.\n\nThis seems very high. Continue?');
             if (!confirmed) return;
         }
 
@@ -632,7 +632,7 @@ function App() {
         setTrips(prev => [...prev, manualTrip]);
         setManualKm('');
         setShowManualEntry(false);
-        alert('âœ… ' + roundedKm + ' km added!');
+        alert('✅ ' + roundedKm + ' km added!');
     };
 
     const cancelManualEntry = () => {
@@ -654,17 +654,17 @@ function App() {
         const tipNum = parseFloat(rideTip) || 0;
 
         if (isNaN(kmNum) || !isFinite(kmNum) || kmNum <= 0) {
-            alert('âŒ Please enter valid kilometers!');
+            alert('❌ Please enter valid kilometers!');
             return;
         }
 
         if (isNaN(earningsNum) || !isFinite(earningsNum) || earningsNum < 0) {
-            alert('âŒ Please enter valid earnings!');
+            alert('❌ Please enter valid earnings!');
             return;
         }
 
         if (kmNum > 500) {
-            const confirmed = window.confirm('âš ï¸ You entered ' + kmNum + ' km.\n\nThis seems very high. Continue?');
+            const confirmed = window.confirm('⚠️ You entered ' + kmNum + ' km.\n\nThis seems very high. Continue?');
             if (!confirmed) return;
         }
 
@@ -728,15 +728,15 @@ function App() {
             ? `(using 5-fill avg: ${effectiveMileageData.mileage.toFixed(2)} km/L)`
             : `(using current tank: ${effectiveMileageData.mileage.toFixed(2)} km/L)`;
 
-        alert(`âœ… Ride Saved!\n\n` +
+        alert(`✅ Ride Saved!\n\n` +
             `Distance: ${roundedKm} km\n` +
             `Base Fare: Rs. ${roundedEarnings}\n` +
-            (roundedTip > 0 ? `Tip: Rs. ${roundedTip} ðŸŽ\n` : '') +
+            (roundedTip > 0 ? `Tip: Rs. ${roundedTip} 🎁\n` : '') +
             `Total Earnings: Rs. ${totalEarnings.toFixed(2)}\n` +
             `Fuel Used: ${fuelUsed.toFixed(2)} L ${mileageInfo}\n` +
             `Fuel Cost: Rs. ${fuelCost.toFixed(2)}\n` +
-            `â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”\n` +
-            `ðŸ’° Profit: Rs. ${profit.toFixed(2)}\n` +
+            `━━━━━━━━━━━━━━━\n` +
+            `💰 Profit: Rs. ${profit.toFixed(2)}\n` +
             `Per KM: Rs. ${profitPerKm.toFixed(2)}/km`
         );
     };
@@ -758,12 +758,12 @@ function App() {
         const myPrice = parseFloat(calcMyPrice);
 
         if (isNaN(km) || km <= 0) {
-            alert('âŒ Enter valid kilometers!');
+            alert('❌ Enter valid kilometers!');
             return;
         }
 
         if (isNaN(offerPrice) || offerPrice < 0) {
-            alert('âŒ Enter valid offer price!');
+            alert('❌ Enter valid offer price!');
             return;
         }
 
@@ -830,7 +830,7 @@ function App() {
 
     const startGPSTracking = (isRideTrip = false) => {
         if (!navigator.geolocation) {
-            alert('âŒ GPS not supported');
+            alert('❌ GPS not supported');
             return;
         }
 
@@ -871,8 +871,8 @@ function App() {
             );
 
             const accuracyMode = highAccuracy ? 'High Accuracy' : 'Standard';
-            const tripType = isRideTrip ? 'ðŸš– Ride' : 'ðŸï¸ Personal';
-            showGpsMessage('ðŸŸ¢ GPS Active (' + tripType + ' - ' + accuracyMode + ')', false);
+            const tripType = isRideTrip ? '🚖 Ride' : '🏍️ Personal';
+            showGpsMessage('🟢 GPS Active (' + tripType + ' - ' + accuracyMode + ')', false);
             setGpsDebug(prev => ({ ...prev, status: 'Tracking ' + tripType + ' (' + accuracyMode + ')' }));
         };
 
@@ -906,7 +906,7 @@ function App() {
                             handleGPSError(retryError);
                             setIsTracking(false);
                             setCurrentTrip(null);
-                            alert('âŒ GPS Failed\n\nEnable Location & go outdoors');
+                            alert('❌ GPS Failed\n\nEnable Location & go outdoors');
                         },
                         {
                             enableHighAccuracy: false,
@@ -933,7 +933,7 @@ function App() {
         const tipNum = parseFloat(rideTip) || 0;
 
         if (isNaN(earningsNum) || !isFinite(earningsNum) || earningsNum < 0) {
-            alert('âŒ Please enter valid earnings!');
+            alert('❌ Please enter valid earnings!');
             return;
         }
 
@@ -994,15 +994,15 @@ function App() {
             ? `(using 5-fill avg: ${effectiveMileageData.mileage.toFixed(2)} km/L)`
             : `(using current tank: ${effectiveMileageData.mileage.toFixed(2)} km/L)`;
 
-        alert(`âœ… Ride Completed!\n\n` +
+        alert(`✅ Ride Completed!\n\n` +
             `Distance: ${actualKm.toFixed(2)} km\n` +
             `Base Fare: Rs. ${roundedEarnings}\n` +
-            (roundedTip > 0 ? `Tip: Rs. ${roundedTip} ðŸŽ\n` : '') +
+            (roundedTip > 0 ? `Tip: Rs. ${roundedTip} 🎁\n` : '') +
             `Total Earnings: Rs. ${totalEarnings.toFixed(2)}\n` +
             `Fuel Used: ${fuelUsed.toFixed(2)} L ${mileageInfo}\n` +
             `Fuel Cost: Rs. ${fuelCost.toFixed(2)}\n` +
-            `â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”\n` +
-            `ðŸ’° Net Profit: Rs. ${profit.toFixed(2)}\n` +
+            `━━━━━━━━━━━━━━━\n` +
+            `💰 Net Profit: Rs. ${profit.toFixed(2)}\n` +
             `Per KM: Rs. ${profitPerKm.toFixed(2)}/km`
         );
     };
@@ -1637,7 +1637,7 @@ function App() {
                         <main className="px-container-padding space-y-element-gap mt-4 max-w-md mx-auto">
                             {/* Trip Type Badge */}
                             <div className="w-full py-3 bg-gradient-to-r from-primary-container to-primary rounded-full flex items-center justify-center animate-pulse-record shadow-[0_0_20px_rgba(78,204,163,0.3)]">
-                                <span className="font-label-caps text-label-caps text-on-primary-container uppercase font-bold">ðŸï¸ PERSONAL TRIP IN PROGRESS ({tripTimeText})</span>
+                                <span className="font-label-caps text-label-caps text-on-primary-container uppercase font-bold">🏍️ PERSONAL TRIP IN PROGRESS ({tripTimeText})</span>
                             </div>
                             <section className="flex flex-col items-center justify-center py-6 w-full">
                                 <div className="relative w-full max-w-xs h-40 glass-card rounded-3xl flex items-center justify-center">
@@ -1834,7 +1834,7 @@ function App() {
                                 {/* Active Trip Badge */}
                                 <div className="w-full ride-gradient rounded-full py-3 px-6 mt-6 flex items-center justify-center gap-3 animate-pulse shadow-[0_0_20px_rgba(118,75,162,0.4)]">
                                     <span className="material-symbols-outlined text-white" style={{ fontVariationSettings: "'FILL' 1" }}>local_taxi</span>
-                                    <span className="font-label-caps text-white tracking-widest font-bold">ðŸš– RIDE TRIP IN PROGRESS</span>
+                                    <span className="font-label-caps text-white tracking-widest font-bold">🚖 RIDE TRIP IN PROGRESS</span>
                                 </div>
                             </section>
 
@@ -1953,7 +1953,7 @@ function App() {
                                     <p className="font-stats-numeral text-primary text-[28px] font-bold">PKR {rideSummary.totalEarnings.toLocaleString('en-IN')}</p>
                                 </div>
                                 <div>
-                                    <p className="font-label-caps text-on-surface-variant text-[10px] uppercase font-bold">Tips ðŸŽ</p>
+                                    <p className="font-label-caps text-on-surface-variant text-[10px] uppercase font-bold">Tips 🎁</p>
                                     <p className="font-stats-numeral text-tertiary-container text-[28px] font-bold">PKR {rideSummary.totalTips.toLocaleString('en-IN')}</p>
                                 </div>
                                 <div className="col-span-2 pt-2 border-t border-white/5">
@@ -2492,7 +2492,7 @@ function App() {
                             {/* Header Section */}
                             <div className="text-center mb-stack-margin relative z-10">
                                 <h1 className="font-headline-md text-headline-md text-on-surface mb-2">
-                                    âœï¸ Add Manual KM
+                                    ✏️ Add Manual KM
                                 </h1>
                                 <p className="font-body-md text-body-md text-on-surface-variant max-w-[240px] mx-auto">
                                     Enter distance when someone else rode.
@@ -2572,7 +2572,7 @@ function App() {
                             {/* Header Section */}
                             <div className="px-8 pt-8 pb-6 border-b border-white/5 relative z-10">
                                 <div className="flex justify-between items-start mb-2">
-                                    <h1 className="font-headline-md text-headline-md text-on-surface">ðŸš– Add Ride Manually</h1>
+                                    <h1 className="font-headline-md text-headline-md text-on-surface">🚖 Add Ride Manually</h1>
                                     <button 
                                         className="text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
                                         onClick={cancelRideEntry}
@@ -2623,7 +2623,7 @@ function App() {
                                 {/* Tip Input (Optional) */}
                                 <div className="space-y-2">
                                     <label className="font-label-caps text-label-caps text-on-surface-variant flex justify-between items-center block uppercase tracking-wider">
-                                        Tip (Optional ðŸŽ)
+                                        Tip (Optional 🎁)
                                         <span className="text-[10px] bg-secondary-container/30 px-2 py-0.5 rounded text-secondary font-bold">OPTIONAL</span>
                                     </label>
                                     <div className="relative group">
@@ -2647,7 +2647,7 @@ function App() {
                                     className="ride-gradient w-full py-4 rounded-xl font-headline-md text-white flex items-center justify-center gap-2 shadow-lg active:scale-[0.98] transition-all hover:brightness-110 cursor-pointer font-bold"
                                     onClick={saveRideEntry}
                                 >
-                                    <span>âœ… Save Ride & Profit</span>
+                                    <span>✅ Save Ride & Profit</span>
                                 </button>
                                 <button 
                                     className="w-full py-2 font-body-md text-on-surface-variant hover:text-on-surface transition-colors active:opacity-60 cursor-pointer"

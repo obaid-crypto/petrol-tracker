@@ -61,6 +61,14 @@ function App() {
     const [smoothSpeed, setSmoothSpeed] = useState(0);
     const [searchTerm, setSearchTerm] = useState('');
 
+    // Reserve Tracking States
+    const [reserveActive, setReserveActive] = useState(false);
+    const [reserveStartDistance, setReserveStartDistance] = useState(0);
+    const [manualReserveDistance, setManualReserveDistance] = useState(0);
+    const [fallbackReserveDistance, setFallbackReserveDistance] = useState('');
+    const [showAddReserveModal, setShowAddReserveModal] = useState(false);
+    const [addReserveInput, setAddReserveInput] = useState('');
+
 
     const watchIdRef = useRef(null);
     const lastPositionRef = useRef(null);
@@ -76,14 +84,14 @@ function App() {
     const calculateRollingAverage = useCallback((entries, windowSize = MILEAGE_CONFIG.ROLLING_WINDOW) => {
         if (!entries || entries.length === 0) return 0;
         const recentEntries = entries.slice(0, Math.min(windowSize, entries.length));
-        const totalDistance = recentEntries.reduce((sum, entry) => sum + (entry.kmTraveled || 0), 0);
+        const totalDistance = recentEntries.reduce((sum, entry) => sum + (entry.mainTankDistance ?? entry.kmTraveled ?? 0), 0);
         const totalLitres = recentEntries.reduce((sum, entry) => sum + entry.litres, 0);
         return totalLitres > 0 ? totalDistance / totalLitres : 0;
     }, []);
 
     const calculateAllTimeAverage = useCallback((entries) => {
         if (!entries || entries.length === 0) return 0;
-        const totalDistance = entries.reduce((sum, entry) => sum + (entry.kmTraveled || 0), 0);
+        const totalDistance = entries.reduce((sum, entry) => sum + (entry.mainTankDistance ?? entry.kmTraveled ?? 0), 0);
         const totalLitres = entries.reduce((sum, entry) => sum + entry.litres, 0);
         return totalLitres > 0 ? totalDistance / totalLitres : 0;
     }, []);
@@ -95,7 +103,7 @@ function App() {
         const lastEntry = entries[0];
         const rollingAvg = calculateRollingAverage(entries);
 
-        const lastTankDistance = lastEntry.kmTraveled || 0;
+        const lastTankDistance = lastEntry.mainTankDistance ?? lastEntry.kmTraveled ?? 0;
         const shouldUseFallback = lastTankDistance < MILEAGE_CONFIG.MIN_DISTANCE_THRESHOLD;
 
         if (shouldUseFallback && rollingAvg > 0 && entries.length >= 2) {
@@ -219,7 +227,7 @@ function App() {
             const distanceMeters = distance * 1000;
             let shouldUpdate = false;
 
-            if (distanceMeters < 1) {
+            if (distanceMeters < 3) {
                 shouldUpdate = false;
             } else if (position.coords.accuracy > 100000) {
                 shouldUpdate = false;
@@ -236,7 +244,7 @@ function App() {
             } else if (distanceMeters > 2) {
                 shouldUpdate = true;
             } else {
-                shouldUpdate = true;
+                shouldUpdate = false;
             }
 
             if (shouldUpdate) {
@@ -357,6 +365,11 @@ function App() {
                         return d.getMonth() === nowMonth && d.getFullYear() === nowYear;
                     });
                     setRideEntries(filteredRides);
+
+                    // Load reserve tracking states
+                    setReserveActive(data.reserveActive || false);
+                    setReserveStartDistance(data.reserveStartDistance || 0);
+                    setManualReserveDistance(data.manualReserveDistance || 0);
                 }
             } catch (error) {
                 console.error('Error loading data:', error);
@@ -380,6 +393,9 @@ function App() {
                     currentTrip,
                     totalKmSinceLastFill,
                     rideEntries,
+                    reserveActive,
+                    reserveStartDistance,
+                    manualReserveDistance,
                     lastSaved: new Date().toISOString()
                 };
                 localStorage.setItem('petrolTrackerData', JSON.stringify(data));
@@ -391,6 +407,9 @@ function App() {
                         currentTrip,
                         totalKmSinceLastFill,
                         rideEntries: rideEntries.slice(0, 50),
+                        reserveActive,
+                        reserveStartDistance,
+                        manualReserveDistance,
                         lastSaved: new Date().toISOString()
                     };
                     localStorage.setItem('petrolTrackerData', JSON.stringify(trimmedData));
@@ -402,7 +421,7 @@ function App() {
         }, 1000);
 
         return () => clearTimeout(timeoutId);
-    }, [petrolEntries, trips, currentTrip, totalKmSinceLastFill, rideEntries]);
+    }, [petrolEntries, trips, currentTrip, totalKmSinceLastFill, rideEntries, reserveActive, reserveStartDistance, manualReserveDistance]);
 
     // ==========================================
     // PWA INSTALL PROMPT
@@ -529,6 +548,10 @@ function App() {
             trips,
             rideEntries,
             totalKmSinceLastFill,
+            reserveActive,
+            reserveStartDistance,
+            manualReserveDistance,
+            fallbackReserveDistance,
             exportDate: new Date().toISOString(),
             appVersion: '2.0'
         };
@@ -569,11 +592,22 @@ function App() {
         const roundedLitres = Math.round(litresNum * 100) / 100;
         const roundedPrice = Math.round(priceNum * 100) / 100;
 
-        const tankMileage = totalKmSinceLastFill > 0
-            ? (totalKmSinceLastFill / roundedLitres).toFixed(2)
+        let liveReserve = reserveActive ? (totalKmSinceLastFill - reserveStartDistance) : 0;
+        let fallback = parseFloat(fallbackReserveDistance);
+        if (isNaN(fallback) || fallback < 0) fallback = 0;
+        
+        let calculatedReserve = liveReserve + manualReserveDistance + fallback;
+        if (calculatedReserve > totalKmSinceLastFill) {
+            calculatedReserve = totalKmSinceLastFill;
+        }
+        
+        let mainTankDistance = totalKmSinceLastFill - calculatedReserve;
+
+        const tankMileage = mainTankDistance > 0
+            ? (mainTankDistance / roundedLitres).toFixed(2)
             : 0;
 
-        const isShortTank = totalKmSinceLastFill < MILEAGE_CONFIG.MIN_DISTANCE_THRESHOLD && totalKmSinceLastFill > 0;
+        const isShortTank = mainTankDistance < MILEAGE_CONFIG.MIN_DISTANCE_THRESHOLD && mainTankDistance > 0;
 
         const entry = {
             id: Date.now(),
@@ -582,6 +616,8 @@ function App() {
             totalCost: roundedLitres * roundedPrice,
             date: fillDate,
             kmTraveled: totalKmSinceLastFill,
+            mainTankDistance: mainTankDistance,
+            reserveDistance: calculatedReserve,
             mileage: tankMileage,
             isEstimated: isShortTank,
             createdAt: new Date().toISOString()
@@ -593,6 +629,10 @@ function App() {
         setLitres('');
         setPricePerLitre('');
         setFillDate(new Date().toISOString().split('T')[0]);
+        setReserveActive(false);
+        setReserveStartDistance(0);
+        setManualReserveDistance(0);
+        setFallbackReserveDistance('');
 
         if (isShortTank) {
             const rollingAvg = calculateRollingAverage([entry, ...petrolEntries]);
@@ -648,6 +688,29 @@ function App() {
     const cancelManualEntry = () => {
         setManualKm('');
         setShowManualEntry(false);
+    };
+
+    // ==========================================
+    // MANUAL RESERVE ENTRY
+    // ==========================================
+
+    const saveAddReserve = () => {
+        const kmNum = parseFloat(addReserveInput);
+        if (isNaN(kmNum) || !isFinite(kmNum) || kmNum <= 0) {
+            alert('❌ Please enter valid kilometers!');
+            return;
+        }
+
+        const roundedKm = Math.round(kmNum * 100) / 100;
+        setManualReserveDistance(prev => prev + roundedKm);
+        setAddReserveInput('');
+        setShowAddReserveModal(false);
+        alert('✅ ' + roundedKm + ' km added to Reserve!');
+    };
+
+    const cancelAddReserve = () => {
+        setAddReserveInput('');
+        setShowAddReserveModal(false);
     };
 
     // ==========================================
@@ -1523,6 +1586,22 @@ function App() {
                             <span className="material-symbols-outlined text-on-surface-variant ml-4">calendar_today</span>
                         </div>
 
+                        {/* Fallback Reserve Input */}
+                        <div className="glass-card rounded-xl p-4 flex items-center justify-between transition-all duration-300 hover:bg-white/5 input-glow border-l-4 border-error">
+                            <div className="flex flex-col flex-1">
+                                <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1">Rode on reserve before this fill? (optional)</label>
+                                <input
+                                    className="bg-transparent border-none text-xl font-semibold text-on-surface focus:ring-0 focus:outline-none w-full placeholder:text-outline/40"
+                                    placeholder="Enter km"
+                                    type="number"
+                                    value={fallbackReserveDistance}
+                                    onChange={(e) => setFallbackReserveDistance(e.target.value)}
+                                    style={{ WebkitAppearance: 'none', MozAppearance: 'textfield' }}
+                                />
+                            </div>
+                            <span className="material-symbols-outlined text-error ml-4">warning</span>
+                        </div>
+
                         {/* Save Button with confetti */}
                         <div className="pt-4 pb-6">
                             <button
@@ -1692,6 +1771,32 @@ function App() {
                                 </div>
                             </div>
 
+                            {/* Reserve Controls */}
+                            <div className="flex flex-col gap-2 pt-2">
+                                <button
+                                    className={`w-full py-4 rounded-2xl flex items-center justify-center gap-3 transition-all cursor-pointer border ${reserveActive ? 'bg-error-container text-on-error-container border-error' : 'glass-card text-on-surface-variant hover:bg-white/5 border-white/10'}`}
+                                    onClick={() => {
+                                        if (!reserveActive) {
+                                            setReserveActive(true);
+                                            setReserveStartDistance(totalKmSinceLastFill);
+                                        } else {
+                                            setReserveActive(false);
+                                            setReserveStartDistance(0);
+                                        }
+                                    }}
+                                >
+                                    <span className="material-symbols-outlined">{reserveActive ? 'warning' : 'local_gas_station'}</span>
+                                    <span className="font-headline-md font-bold uppercase">{reserveActive ? 'Reserve Active' : 'Switch to Reserve'}</span>
+                                </button>
+                                <button 
+                                    className="w-full py-4 rounded-2xl border border-white/10 glass-card flex items-center justify-center gap-2 hover:bg-white/5 transition-all active:scale-95 cursor-pointer"
+                                    onClick={() => setShowAddReserveModal(true)}
+                                >
+                                    <span className="material-symbols-outlined text-on-surface-variant">add_circle</span>
+                                    <span className="font-body-lg text-on-surface font-semibold">Add Reserve Manually</span>
+                                </button>
+                            </div>
+
                             {/* Primary Control */}
                             <button 
                                 className="w-full py-5 rounded-2xl bg-gradient-to-br from-error-container to-[#ff5252] shadow-2xl shadow-error/30 flex items-center justify-center gap-3 active:scale-[0.98] transition-all animate-pulse-record cursor-pointer"
@@ -1744,6 +1849,32 @@ function App() {
                                         <span className="text-on-surface-variant text-[12px] font-bold">km</span>
                                     </div>
                                 </div>
+                            </section>
+
+                            {/* Reserve Controls */}
+                            <section className="pt-2 flex flex-col gap-2">
+                                <button
+                                    className={`w-full py-4 rounded-2xl flex items-center justify-center gap-3 transition-all cursor-pointer border ${reserveActive ? 'bg-error-container text-on-error-container border-error' : 'glass-card text-on-surface-variant hover:bg-white/5 border-white/10'}`}
+                                    onClick={() => {
+                                        if (!reserveActive) {
+                                            setReserveActive(true);
+                                            setReserveStartDistance(totalKmSinceLastFill);
+                                        } else {
+                                            setReserveActive(false);
+                                            setReserveStartDistance(0);
+                                        }
+                                    }}
+                                >
+                                    <span className="material-symbols-outlined">{reserveActive ? 'warning' : 'local_gas_station'}</span>
+                                    <span className="font-headline-md font-bold uppercase">{reserveActive ? 'Reserve Active' : 'Switch to Reserve'}</span>
+                                </button>
+                                <button 
+                                    className="w-full py-4 rounded-2xl border border-white/10 glass-card flex items-center justify-center gap-2 hover:bg-white/5 transition-all active:scale-95 cursor-pointer"
+                                    onClick={() => setShowAddReserveModal(true)}
+                                >
+                                    <span className="material-symbols-outlined text-on-surface-variant">add_circle</span>
+                                    <span className="font-body-lg text-on-surface font-semibold">Add Reserve Manually</span>
+                                </button>
                             </section>
 
                             {/* Primary Controls */}
@@ -1812,6 +1943,13 @@ function App() {
                                 >
                                     <span className="material-symbols-outlined text-on-surface-variant">add_circle</span>
                                     <span className="font-body-lg text-body-lg text-on-surface font-semibold">Manual Ride</span>
+                                </button>
+                                <button 
+                                    className="w-full py-4 rounded-2xl border border-white/10 glass-card flex items-center justify-center gap-2 hover:bg-white/5 transition-all active:scale-95 cursor-pointer mt-2"
+                                    onClick={() => setShowAddReserveModal(true)}
+                                >
+                                    <span className="material-symbols-outlined text-on-surface-variant">add_circle</span>
+                                    <span className="font-body-lg text-body-lg text-on-surface font-semibold">Add Reserve Manually</span>
                                 </button>
                             </section>
 
@@ -2580,6 +2718,12 @@ function App() {
                                                 )}
                                             </div>
                                         </div>
+                                        {entry.reserveDistance > 0 && (
+                                            <div className="mt-2 text-[10px] text-error font-bold flex justify-between bg-error/10 px-2 py-1 rounded">
+                                                <span>MAIN TANK: {entry.mainTankDistance?.toFixed(1)} km</span>
+                                                <span>RESERVE: {entry.reserveDistance?.toFixed(1)} km</span>
+                                            </div>
+                                        )}
                                     </div>
                                 );
                             })
@@ -2746,6 +2890,68 @@ function App() {
                             <div className="glass-card px-4 py-2 rounded-full border border-white/5 flex items-center gap-2">
                                 <div className="w-2 h-2 rounded-full bg-primary animate-pulse"></div>
                                 <span className="font-label-caps text-label-caps text-on-surface-variant/80 uppercase">Personal ride record</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 2b. Add Manual Reserve Modal */}
+            {showAddReserveModal && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex flex-col items-center justify-center px-container-margin overflow-hidden">
+                    {/* Modal Container */}
+                    <div className="relative w-full max-w-sm z-10 animate-zoom-in-fade">
+                        {/* Main Card */}
+                        <div className="glass-card bg-surface-container-lowest rounded-[32px] p-8 flex flex-col items-center teal-glow-border relative overflow-hidden">
+                            {/* Atmospheric Glow Background Inside Card */}
+                            <div className="absolute -top-20 -right-20 w-40 h-40 bg-error/10 blur-[80px] rounded-full"></div>
+                            <div className="absolute -bottom-20 -left-20 w-40 h-40 bg-error-container/10 blur-[80px] rounded-full"></div>
+                            
+                            {/* Header Section */}
+                            <div className="text-center mb-stack-margin relative z-10">
+                                <h1 className="font-headline-md text-headline-md text-on-surface mb-2">
+                                    ⛽ Add Reserve
+                                </h1>
+                                <p className="font-body-md text-body-md text-on-surface-variant max-w-[240px] mx-auto">
+                                    Enter distance ridden on reserve.
+                                </p>
+                            </div>
+
+                            {/* Kilometers Input Group */}
+                            <div className="w-full flex flex-col items-center mb-10 relative z-10">
+                                <div className="relative group w-full">
+                                    <input 
+                                        autoFocus
+                                        className="bg-transparent border-b-2 border-error/30 focus:border-error text-center font-display-hero text-[64px] w-full py-2 text-error placeholder-error/20 transition-all duration-300 appearance-none focus:ring-0 focus:outline-none" 
+                                        placeholder="0.0" 
+                                        style={{ fontFamily: "'Manrope', sans-serif", fontWeight: 800 }}
+                                        type="number"
+                                        value={addReserveInput}
+                                        onChange={(e) => setAddReserveInput(e.target.value.replace(/[^0-9.]/g, ''))}
+                                    />
+                                    <span className="absolute -bottom-6 left-1/2 -translate-x-1/2 font-label-caps text-label-caps text-error/60 tracking-[0.2em] whitespace-nowrap">
+                                        KILOMETERS
+                                    </span>
+                                </div>
+                            </div>
+
+                            {/* Actions */}
+                            <div className="w-full space-y-4 relative z-10">
+                                {/* Primary Action */}
+                                <button 
+                                    className="w-full h-[64px] bg-gradient-to-r from-error to-error-container rounded-2xl flex items-center justify-center gap-2 text-white font-body-lg text-body-lg btn-press transition-transform shadow-lg shadow-error/20 cursor-pointer active:scale-97"
+                                    onClick={saveAddReserve}
+                                >
+                                    <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>check_circle</span>
+                                    Save Reserve
+                                </button>
+                                {/* Ghost Action */}
+                                <button 
+                                    className="w-full h-[56px] bg-transparent border border-white/10 rounded-2xl flex items-center justify-center text-on-surface-variant font-body-md text-body-md btn-press transition-all hover:bg-white/5 active:bg-white/10 cursor-pointer active:scale-97"
+                                    onClick={cancelAddReserve}
+                                >
+                                    Cancel
+                                </button>
                             </div>
                         </div>
                     </div>

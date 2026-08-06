@@ -827,9 +827,6 @@ function App() {
     // MANUAL KM ENTRY
     // ==========================================
 
-    const handleManualEntryRequest = () => {
-        setShowManualEntry(true);
-    };
 
     const saveManualKm = () => {
         const kmNum = parseFloat(manualKm);
@@ -893,9 +890,6 @@ function App() {
     // RIDE ENTRY (MANUAL)
     // ==========================================
 
-    const handleRideEntryRequest = () => {
-        setShowRideEntry(true);
-    };
 
     const saveRideEntry = () => {
         const kmNum = parseFloat(rideKm);
@@ -1530,36 +1524,6 @@ function App() {
                     </div>
                 </section>
 
-                {/* ── Quick Actions ── */}
-                <section className="grid grid-cols-1 gap-md">
-                    <button
-                        className="group relative overflow-hidden glass-card p-lg rounded-full flex items-center justify-between transition-all active:scale-95 border border-primary/20"
-                        onClick={handleManualEntryRequest}
-                    >
-                        <div className="absolute inset-0 bg-primary/5 group-hover:bg-primary/10 transition-colors rounded-full"></div>
-                        <div className="flex items-center gap-md relative z-10">
-                            <div className="w-12 h-12 rounded-full bg-primary-container/20 flex items-center justify-center text-primary-container glow-mint">
-                                <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>speed</span>
-                            </div>
-                            <span className="font-headline-md text-lg text-on-surface">Add Manual KM</span>
-                        </div>
-                        <span className="material-symbols-outlined text-primary-container relative z-10">chevron_right</span>
-                    </button>
-
-                    <button
-                        className="group relative overflow-hidden glass-card p-lg rounded-full flex items-center justify-between transition-all active:scale-95 border border-secondary/20"
-                        onClick={handleRideEntryRequest}
-                    >
-                        <div className="absolute inset-0 bg-secondary/5 group-hover:bg-secondary/10 transition-colors rounded-full"></div>
-                        <div className="flex items-center gap-md relative z-10">
-                            <div className="w-12 h-12 rounded-full bg-secondary-container/20 flex items-center justify-center text-secondary-container glow-lavender">
-                                <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>local_gas_station</span>
-                            </div>
-                            <span className="font-headline-md text-lg text-on-surface">Log Ride Manually</span>
-                        </div>
-                        <span className="material-symbols-outlined text-secondary-container relative z-10">chevron_right</span>
-                    </button>
-                </section>
 
                 {/* ── This Month – Asymmetric Layout ── */}
                 <section className="space-y-lg">

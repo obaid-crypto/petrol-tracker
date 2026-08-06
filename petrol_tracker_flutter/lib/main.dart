@@ -102,6 +102,8 @@ class Trip {
   final bool isRide;
   final double earnings;
   final bool isManual;
+  final bool hasEstimatedSegment;
+  final double estimatedKm;
 
   Trip({
     required this.id,
@@ -112,6 +114,8 @@ class Trip {
     required this.isRide,
     required this.earnings,
     required this.isManual,
+    this.hasEstimatedSegment = false,
+    this.estimatedKm = 0.0,
   });
 
   Map<String, dynamic> toJson() => {
@@ -123,6 +127,8 @@ class Trip {
         'isRide': isRide,
         'earnings': earnings,
         'isManual': isManual,
+        'hasEstimatedSegment': hasEstimatedSegment,
+        'estimatedKm': estimatedKm,
       };
 
   factory Trip.fromJson(Map<String, dynamic> json) => Trip(
@@ -134,6 +140,8 @@ class Trip {
         isRide: json['isRide'] ?? false,
         earnings: (json['earnings'] as num).toDouble(),
         isManual: json['isManual'] ?? false,
+        hasEstimatedSegment: json['hasEstimatedSegment'] ?? false,
+        estimatedKm: (json['estimatedKm'] ?? 0.0) as double,
       );
 }
 
@@ -151,6 +159,8 @@ class RideEntry {
   final double costPerKm;
   final double mileageUsed;
   final String mileageSource;
+  final bool hasEstimatedSegment;
+  final double estimatedKm;
 
   RideEntry({
     required this.id,
@@ -166,6 +176,8 @@ class RideEntry {
     required this.costPerKm,
     required this.mileageUsed,
     required this.mileageSource,
+    this.hasEstimatedSegment = false,
+    this.estimatedKm = 0.0,
   });
 
   Map<String, dynamic> toJson() => {
@@ -182,6 +194,8 @@ class RideEntry {
         'costPerKm': costPerKm,
         'mileageUsed': mileageUsed,
         'mileageSource': mileageSource,
+        'hasEstimatedSegment': hasEstimatedSegment,
+        'estimatedKm': estimatedKm,
       };
 
   factory RideEntry.fromJson(Map<String, dynamic> json) => RideEntry(
@@ -198,6 +212,8 @@ class RideEntry {
         costPerKm: (json['costPerKm'] as num).toDouble(),
         mileageUsed: (json['mileageUsed'] as num).toDouble(),
         mileageSource: json['mileageSource'] ?? '',
+        hasEstimatedSegment: json['hasEstimatedSegment'] ?? false,
+        estimatedKm: (json['estimatedKm'] ?? 0.0) as double,
       );
 }
 
@@ -228,6 +244,27 @@ class TrackerStore extends ChangeNotifier {
 
   StreamSubscription<Position>? _positionStream;
   Position? _lastPosition;
+
+  // --- Signal-loss estimation state ---
+  bool gpsSignalLost = false;
+  DateTime? signalLostAt;
+  double lastKnownSpeed = 0.0; // m/s
+  DateTime? lastKnownSpeedTimestamp;
+  double estimatedDistance = 0.0; // km
+  double totalEstimatedKm = 0.0; // km
+  bool hasEstimatedSegment = false;
+  int _consecutiveTimeouts = 0;
+  Timer? _estimationTimer;
+  final List<Position> _recentPositions = [];
+
+  String get gpsSignalLossBannerMessage {
+    if (!gpsSignalLost || signalLostAt == null) return '';
+    final elapsedMin = DateTime.now().difference(signalLostAt!).inMinutes;
+    if (elapsedMin >= 5) {
+      return '⚠️ Long GPS gap detected ($elapsedMin min). Please verify distance manually when you stop.';
+    }
+    return '📡 GPS Signal Lost — estimating distance using last known speed ${(lastKnownSpeed * 3.6).toStringAsFixed(1)} km/h';
+  }
 
   // Search and filters
   String searchTerm = '';
@@ -294,6 +331,87 @@ class TrackerStore extends ChangeNotifier {
     };
   }
 
+  void _startEstimationTimer(DateTime lossTime) {
+    _estimationTimer?.cancel();
+    _estimationTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
+      if (!isTracking || !gpsSignalLost || signalLostAt == null) {
+        timer.cancel();
+        return;
+      }
+      final elapsed = DateTime.now().difference(lossTime);
+      if (elapsed.inMinutes >= 5) {
+        timer.cancel();
+        notifyListeners();
+        return;
+      }
+      estimatedDistance = (lastKnownSpeed * elapsed.inSeconds) / 1000.0;
+      hasEstimatedSegment = true;
+      notifyListeners();
+    });
+  }
+
+  void handleGPSError(dynamic error) {
+    if (!isTracking) return;
+
+    final errStr = error.toString().toLowerCase();
+    bool isUnavailable = errStr.contains('position_unavailable') || errStr.contains('unavailable');
+    bool isTimeout = errStr.contains('timeout');
+
+    if (isTimeout) {
+      _consecutiveTimeouts++;
+    } else if (isUnavailable) {
+      _consecutiveTimeouts = 2; // immediately trigger
+    }
+
+    if (isUnavailable || _consecutiveTimeouts >= 2) {
+      if (lastKnownSpeed > 0.0) {
+        if (!gpsSignalLost) {
+          gpsSignalLost = true;
+          signalLostAt = DateTime.now();
+          _startEstimationTimer(signalLostAt!);
+        }
+        gpsStatus = 'Signal Lost';
+        _showGpsMessage('📡 GPS Signal Lost — estimating distance using last known speed ${(lastKnownSpeed * 3.6).toStringAsFixed(1)} km/h');
+      } else {
+        gpsStatus = 'No Signal';
+        _showGpsMessage('⚠️ GPS lost — speed unknown, cannot estimate distance.');
+      }
+    } else {
+      gpsStatus = 'No Signal';
+      _showGpsMessage('📡 GPS connection lost: $error');
+    }
+    notifyListeners();
+  }
+
+  void _finalizeEstimation() {
+    _estimationTimer?.cancel();
+    _estimationTimer = null;
+    
+    if (gpsSignalLost) {
+      gpsSignalLost = false;
+      if (estimatedDistance > 0) {
+        totalEstimatedKm += estimatedDistance;
+        hasEstimatedSegment = true;
+        if (currentTrip != null) {
+          currentTrip = Trip(
+            id: currentTrip!.id,
+            startTime: currentTrip!.startTime,
+            endTime: currentTrip!.endTime,
+            distance: currentTrip!.distance + estimatedDistance,
+            isActive: currentTrip!.isActive,
+            isRide: currentTrip!.isRide,
+            earnings: currentTrip!.earnings,
+            isManual: currentTrip!.isManual,
+            hasEstimatedSegment: hasEstimatedSegment,
+            estimatedKm: totalEstimatedKm,
+          );
+        }
+        totalKmSinceLastFill += estimatedDistance;
+      }
+      estimatedDistance = 0.0;
+    }
+  }
+
   // ==========================================
   // GPS TRACKING METHODS
   // ==========================================
@@ -324,6 +442,19 @@ class TrackerStore extends ChangeNotifier {
     _lastPosition = null;
     smoothSpeed = 0.0;
 
+    // Reset signal loss and estimation state
+    gpsSignalLost = false;
+    signalLostAt = null;
+    lastKnownSpeed = 0.0;
+    lastKnownSpeedTimestamp = null;
+    estimatedDistance = 0.0;
+    totalEstimatedKm = 0.0;
+    hasEstimatedSegment = false;
+    _consecutiveTimeouts = 0;
+    _recentPositions.clear();
+    _estimationTimer?.cancel();
+    _estimationTimer = null;
+
     currentTrip = Trip(
       id: DateTime.now().millisecondsSinceEpoch,
       startTime: DateTime.now().toIso8601String(),
@@ -333,6 +464,8 @@ class TrackerStore extends ChangeNotifier {
       isRide: isRide,
       earnings: 0.0,
       isManual: false,
+      hasEstimatedSegment: false,
+      estimatedKm: 0.0,
     );
     notifyListeners();
 
@@ -352,6 +485,70 @@ class TrackerStore extends ChangeNotifier {
           gpsStatus = 'Waiting for GPS lock... (${position.accuracy.toStringAsFixed(0)}m)';
           notifyListeners();
           return; // Do not anchor or count distance until signal is good enough.
+        }
+
+        // Store last known speed and timestamp
+        _recentPositions.add(position);
+        if (_recentPositions.length > 3) {
+          _recentPositions.removeAt(0);
+        }
+
+        double calculatedSpeed = position.speed;
+        if (calculatedSpeed <= 0.0 && _recentPositions.length >= 2) {
+          final prevPos = _recentPositions[_recentPositions.length - 2];
+          final dist = Geolocator.distanceBetween(
+            prevPos.latitude,
+            prevPos.longitude,
+            position.latitude,
+            position.longitude,
+          );
+          final timeDiffSec = position.timestamp != null && prevPos.timestamp != null
+              ? position.timestamp!.difference(prevPos.timestamp!).inSeconds
+              : 0;
+          if (timeDiffSec > 0) {
+            calculatedSpeed = dist / timeDiffSec;
+          }
+        }
+
+        if (calculatedSpeed >= 0.0) {
+          lastKnownSpeed = calculatedSpeed;
+          lastKnownSpeedTimestamp = DateTime.now();
+        }
+
+        // Reconnect logic
+        if (gpsSignalLost) {
+          _estimationTimer?.cancel();
+          _estimationTimer = null;
+          gpsSignalLost = false;
+
+          if (estimatedDistance > 0) {
+            final double addedDist = estimatedDistance;
+            totalEstimatedKm += addedDist;
+            hasEstimatedSegment = true;
+            if (currentTrip != null) {
+              currentTrip = Trip(
+                id: currentTrip!.id,
+                startTime: currentTrip!.startTime,
+                endTime: currentTrip!.endTime,
+                distance: currentTrip!.distance + addedDist,
+                isActive: currentTrip!.isActive,
+                isRide: currentTrip!.isRide,
+                earnings: currentTrip!.earnings,
+                isManual: currentTrip!.isManual,
+                hasEstimatedSegment: hasEstimatedSegment,
+                estimatedKm: totalEstimatedKm,
+              );
+            }
+            totalKmSinceLastFill += addedDist;
+            _showGpsMessage('✅ GPS reconnected — added ~${addedDist.toStringAsFixed(2)} km estimated during signal loss');
+          }
+
+          estimatedDistance = 0.0;
+          _consecutiveTimeouts = 0;
+          _lastPosition = position;
+          gpsStatus = 'Active ✓';
+          notifyListeners();
+          return;
         }
 
         gpsStatus = 'Active ✓';
@@ -377,6 +574,8 @@ class TrackerStore extends ChangeNotifier {
                 isRide: currentTrip!.isRide,
                 earnings: currentTrip!.earnings,
                 isManual: currentTrip!.isManual,
+                hasEstimatedSegment: hasEstimatedSegment,
+                estimatedKm: totalEstimatedKm,
               );
             }
             totalKmSinceLastFill += distanceInKm;
@@ -390,9 +589,7 @@ class TrackerStore extends ChangeNotifier {
         notifyListeners();
       },
       onError: (error) {
-        _showGpsMessage('📡 GPS connection lost: $error');
-        gpsStatus = 'No Signal';
-        notifyListeners();
+        handleGPSError(error);
       },
     );
 
@@ -404,6 +601,8 @@ class TrackerStore extends ChangeNotifier {
       _positionStream!.cancel();
       _positionStream = null;
     }
+
+    _finalizeEstimation();
 
     if (currentTrip != null) {
       final actualKm = currentTrip!.distance;
@@ -423,6 +622,8 @@ class TrackerStore extends ChangeNotifier {
           isRide: false,
           earnings: 0.0,
           isManual: false,
+          hasEstimatedSegment: hasEstimatedSegment,
+          estimatedKm: totalEstimatedKm,
         );
         trips.add(completed);
         currentTrip = null;
@@ -438,6 +639,9 @@ class TrackerStore extends ChangeNotifier {
 
   void completeRideWithEarnings(double earnings, double tip) {
     if (currentTrip == null) return;
+    
+    _finalizeEstimation();
+    
     final actualKm = currentTrip!.distance;
 
     final mileageData = getEffectiveMileage();
@@ -471,6 +675,8 @@ class TrackerStore extends ChangeNotifier {
       costPerKm: costPerKm,
       mileageUsed: mileageVal,
       mileageSource: mileageData['source'],
+      hasEstimatedSegment: hasEstimatedSegment,
+      estimatedKm: totalEstimatedKm,
     );
 
     rideEntries.insert(0, rideEntry);
@@ -484,6 +690,8 @@ class TrackerStore extends ChangeNotifier {
       isRide: true,
       earnings: totalEarnings,
       isManual: false,
+      hasEstimatedSegment: hasEstimatedSegment,
+      estimatedKm: totalEstimatedKm,
     );
 
     trips.add(completedTrip);
@@ -645,6 +853,19 @@ class TrackerStore extends ChangeNotifier {
       await _positionStream!.cancel();
       _positionStream = null;
     }
+    _estimationTimer?.cancel();
+    _estimationTimer = null;
+
+    gpsSignalLost = false;
+    signalLostAt = null;
+    lastKnownSpeed = 0.0;
+    lastKnownSpeedTimestamp = null;
+    estimatedDistance = 0.0;
+    totalEstimatedKm = 0.0;
+    hasEstimatedSegment = false;
+    _consecutiveTimeouts = 0;
+    _recentPositions.clear();
+
     petrolEntries.clear();
     trips.clear();
     currentTrip = null;
@@ -1758,6 +1979,31 @@ class _PersonalTripViewState extends State<PersonalTripView> {
               ],
             ),
           ),
+        if (isTracking && store.gpsSignalLost)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            margin: const EdgeInsets.only(bottom: 20),
+            decoration: BoxDecoration(
+              color: const Color(0x22FFC8A1),
+              borderRadius: BorderRadius.circular(15),
+              border: Border.all(color: const Color(0x33FFC8A1)),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  store.gpsSignalLossBannerMessage.startsWith('⚠️') ? Icons.warning : Icons.satellite_alt,
+                  color: const Color(0xFFFFC8A1),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    store.gpsSignalLossBannerMessage,
+                    style: const TextStyle(fontSize: 13, color: Color(0xFFFFC8A1)),
+                  ),
+                ),
+              ],
+            ),
+          ),
         // Speedometer UI
         Center(
           child: Container(
@@ -1858,10 +2104,27 @@ class _PersonalTripViewState extends State<PersonalTripView> {
                       ],
                     ),
                     const SizedBox(height: 8),
-                    Text(
-                      '${(store.currentTrip?.distance ?? 0.0).toStringAsFixed(2)} km',
-                      style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-                    )
+                    if (store.gpsSignalLost) ...[
+                      Text(
+                        'GPS: ${(store.currentTrip?.distance ?? 0.0).toStringAsFixed(2)} km',
+                        style: const TextStyle(fontSize: 12, color: Colors.white70),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '+ Est: ${store.estimatedDistance.toStringAsFixed(2)} km',
+                        style: const TextStyle(fontSize: 12, color: Color(0xFFFFC8A1)),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '= ${((store.currentTrip?.distance ?? 0.0) + store.estimatedDistance).toStringAsFixed(2)} km total',
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF6DE9BE)),
+                      ),
+                    ] else ...[
+                      Text(
+                        '${(store.currentTrip?.distance ?? 0.0).toStringAsFixed(2)} km',
+                        style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                      )
+                    ]
                   ],
                 ),
               ),
@@ -2002,11 +2265,48 @@ class RideTripView extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                if (store.gpsSignalLost) ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    margin: const EdgeInsets.only(bottom: 12),
+                    decoration: BoxDecoration(
+                      color: const Color(0x22FFC8A1),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0x33FFC8A1)),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          store.gpsSignalLossBannerMessage.startsWith('⚠️') ? Icons.warning : Icons.satellite_alt,
+                          color: const Color(0xFFFFC8A1),
+                          size: 16,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            store.gpsSignalLossBannerMessage,
+                            style: const TextStyle(fontSize: 11, color: Color(0xFFFFC8A1)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
                 Row(
                   mainAxisAlignment: MainAxisAlignment.between,
                   children: [
                     const Text('Live Tracking Ride...', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF6DE9BE))),
-                    Text('${store.currentTrip!.distance.toStringAsFixed(2)} km', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                    if (store.gpsSignalLost)
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text('GPS: ${store.currentTrip!.distance.toStringAsFixed(2)} km', style: const TextStyle(fontSize: 11, color: Colors.white70)),
+                          Text('+ Est: ${store.estimatedDistance.toStringAsFixed(2)} km', style: const TextStyle(fontSize: 11, color: Color(0xFFFFC8A1))),
+                          Text('= ${(store.currentTrip!.distance + store.estimatedDistance).toStringAsFixed(2)} km total', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF6DE9BE))),
+                        ],
+                      )
+                    else
+                      Text('${store.currentTrip!.distance.toStringAsFixed(2)} km', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                   ],
                 ),
                 const SizedBox(height: 12),
@@ -2055,9 +2355,32 @@ class RideTripView extends StatelessWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               const Text('Ride Entry', style: TextStyle(fontWeight: FontWeight.bold)),
-                              Text(
-                                '${ride.km.toStringAsFixed(1)} km • ${DateFormat('dd MMM').format(DateTime.parse(ride.date))}',
-                                style: const TextStyle(fontSize: 11, color: Colors.white50),
+                              Row(
+                                children: [
+                                  Text(
+                                    '${ride.km.toStringAsFixed(1)} km',
+                                    style: const TextStyle(fontSize: 11, color: Colors.white50),
+                                  ),
+                                  if (ride.hasEstimatedSegment) ...[
+                                    const SizedBox(width: 6),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 4, py: 1),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0x33FFC8A1),
+                                        borderRadius: BorderRadius.circular(4),
+                                        border: Border.all(color: const Color(0x55FFC8A1)),
+                                      ),
+                                      child: Text(
+                                        '~${ride.estimatedKm.toStringAsFixed(1)} km EST',
+                                        style: const TextStyle(fontSize: 8, color: Color(0xFFFFC8A1), fontWeight: FontWeight.bold),
+                                      ),
+                                    ),
+                                  ],
+                                  Text(
+                                    ' • ${DateFormat('dd MMM').format(DateTime.parse(ride.date))}',
+                                    style: const TextStyle(fontSize: 11, color: Colors.white50),
+                                  ),
+                                ],
                               )
                             ],
                           ),
@@ -2170,7 +2493,14 @@ class _RideCompletionDialogState extends State<RideCompletionDialog> {
                 Text(
                   '${widget.distance.toStringAsFixed(2)} km',
                   style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF6DE9BE)),
-                )
+                ),
+                if (TrackerStore.instance.currentTrip != null && TrackerStore.instance.currentTrip!.hasEstimatedSegment) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    '(GPS: ${(widget.distance - TrackerStore.instance.currentTrip!.estimatedKm).toStringAsFixed(2)} km + Est: ${TrackerStore.instance.currentTrip!.estimatedKm.toStringAsFixed(2)} km)',
+                    style: const TextStyle(fontSize: 11, color: Color(0xFFFFC8A1)),
+                  ),
+                ]
               ],
             ),
           ),

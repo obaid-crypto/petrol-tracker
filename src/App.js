@@ -69,6 +69,20 @@ function App() {
     const [showAddReserveModal, setShowAddReserveModal] = useState(false);
     const [addReserveInput, setAddReserveInput] = useState('');
 
+    // --- Signal-loss estimation state ---
+    const [gpsSignalLost, setGpsSignalLost] = useState(false);
+    const [lastKnownSpeed, setLastKnownSpeed] = useState(0); // m/s
+    const [estimatedDistance, setEstimatedDistance] = useState(0); // km, current gap
+    const [totalEstimatedKm, setTotalEstimatedKm] = useState(0); // km, total for current trip
+    const [hasEstimatedSegment, setHasEstimatedSegment] = useState(false);
+    const [signalLostAt, setSignalLostAt] = useState(null);
+
+    const consecutiveTimeoutsRef = useRef(0);
+    const estimationTimerRef = useRef(null);
+    const lastKnownSpeedRef = useRef(0);
+    const estimatedDistanceRef = useRef(0);
+    const recentPositionsRef = useRef([]);
+    const isRideRef = useRef(false);
 
     const watchIdRef = useRef(null);
     const lastPositionRef = useRef(null);
@@ -77,9 +91,14 @@ function App() {
     const positionHistoryRef = useRef([]);
     const isFirstPositionAfterStart = useRef(true);
 
-    // ==========================================
-    // MILEAGE CALCULATION HELPERS
-    // ==========================================
+    const gpsSignalLossBannerMessage = useMemo(() => {
+        if (!gpsSignalLost || !signalLostAt) return '';
+        const elapsedMin = Math.floor((Date.now() - signalLostAt) / 60000);
+        if (elapsedMin >= 5) {
+            return `⚠️ Long GPS gap detected (${elapsedMin} min). Please verify distance manually when you stop.`;
+        }
+        return `📡 GPS Signal Lost — estimating distance using last known speed ${(lastKnownSpeed * 3.6).toFixed(1)} km/h`;
+    }, [gpsSignalLost, signalLostAt, lastKnownSpeed]);
 
     const calculateRollingAverage = useCallback((entries, windowSize = MILEAGE_CONFIG.ROLLING_WINDOW) => {
         if (!entries || entries.length === 0) return 0;
@@ -156,10 +175,59 @@ function App() {
         }
     }, []);
 
+    const _startEstimationTimer = (lossTime) => {
+        if (estimationTimerRef.current) {
+            clearInterval(estimationTimerRef.current);
+        }
+        estimationTimerRef.current = setInterval(() => {
+            const elapsedMs = Date.now() - lossTime;
+            const elapsedSec = elapsedMs / 1000;
+            if (elapsedSec > 300) {
+                // Cap at 5 minutes
+                clearInterval(estimationTimerRef.current);
+                estimationTimerRef.current = null;
+                return;
+            }
+            const gapDist = (lastKnownSpeedRef.current * elapsedSec) / 1000;
+            setEstimatedDistance(gapDist);
+            estimatedDistanceRef.current = gapDist;
+            setHasEstimatedSegment(true);
+        }, 5000);
+    };
+
     const handleGPSError = useCallback((error) => {
         console.error('GPS Error:', error);
         let message = '';
         let status = 'Error';
+
+        if (isTracking) {
+            if (error.code === error.TIMEOUT) {
+                consecutiveTimeoutsRef.current += 1;
+            } else if (error.code === error.POSITION_UNAVAILABLE) {
+                consecutiveTimeoutsRef.current = 2; // immediately trigger
+            }
+
+            if (error.code === error.POSITION_UNAVAILABLE || consecutiveTimeoutsRef.current >= 2) {
+                if (lastKnownSpeedRef.current > 0) {
+                    setGpsSignalLost(true);
+                    setSignalLostAt(prev => {
+                        if (!prev) {
+                            const now = Date.now();
+                            _startEstimationTimer(now);
+                            return now;
+                        }
+                        return prev;
+                    });
+                    setGpsDebug(prev => ({ ...prev, status: 'Signal Lost' }));
+                    showGpsMessage(`📡 GPS Signal Lost — estimating distance using last known speed ${(lastKnownSpeedRef.current * 3.6).toFixed(1)} km/h`, true);
+                    return;
+                } else {
+                    setGpsDebug(prev => ({ ...prev, status: 'No Signal' }));
+                    showGpsMessage('⚠️ GPS lost — speed unknown, cannot estimate distance.', true);
+                    return;
+                }
+            }
+        }
 
         switch (error.code) {
             case error.PERMISSION_DENIED:
@@ -182,30 +250,91 @@ function App() {
 
         setGpsDebug(prev => ({ ...prev, status }));
         showGpsMessage(message, true);
-    }, [showGpsMessage]);
+    }, [isTracking, showGpsMessage]);
 
     const handlePositionUpdate = useCallback((position) => {
         positionCountRef.current += 1;
         const updateNum = positionCountRef.current;
+        const accuracy = position.coords.accuracy;
+
+        // GPS accuracy guard: wait until 5 meters or better
+        if (accuracy > 5.0) {
+            setGpsDebug(prev => ({
+                ...prev,
+                updates: updateNum,
+                accuracy: accuracy,
+                status: `Waiting for GPS lock... (${accuracy.toFixed(0)}m)`
+            }));
+            return;
+        }
+
         const newPosition = {
             lat: position.coords.latitude,
             lng: position.coords.longitude,
-            accuracy: position.coords.accuracy,
+            accuracy: accuracy,
             speed: position.coords.speed || 0,
             timestamp: Date.now()
         };
 
-        positionHistoryRef.current.push(newPosition);
-        if (positionHistoryRef.current.length > 5) {
-            positionHistoryRef.current.shift();
+        // Maintain last 2-3 positions in recentPositionsRef for fallback calculation
+        recentPositionsRef.current.push(newPosition);
+        if (recentPositionsRef.current.length > 3) {
+            recentPositionsRef.current.shift();
+        }
+
+        let speed = position.coords.speed;
+        if ((speed === null || speed === undefined || speed < 0) && recentPositionsRef.current.length >= 2) {
+            const prevPos = recentPositionsRef.current[recentPositionsRef.current.length - 2];
+            const distKm = calculateDistance(prevPos.lat, prevPos.lng, newPosition.lat, newPosition.lng);
+            const timeDiffSec = (newPosition.timestamp - prevPos.timestamp) / 1000;
+            if (timeDiffSec > 0) {
+                speed = (distKm * 1000) / timeDiffSec; // m/s
+            }
+        }
+
+        if (speed !== null && speed !== undefined && speed >= 0) {
+            setLastKnownSpeed(speed);
+            lastKnownSpeedRef.current = speed;
+        }
+
+        // Check if reconnecting from signal loss
+        if (gpsSignalLost) {
+            if (estimationTimerRef.current) {
+                clearInterval(estimationTimerRef.current);
+                estimationTimerRef.current = null;
+            }
+
+            setGpsSignalLost(false);
+            const addedDist = estimatedDistanceRef.current;
+            if (addedDist > 0) {
+                setTotalEstimatedKm(prev => prev + addedDist);
+                setHasEstimatedSegment(true);
+                setCurrentTrip(prev => {
+                    if (!prev) return prev;
+                    return { ...prev, distance: prev.distance + addedDist };
+                });
+                setTotalKmSinceLastFill(prev => prev + addedDist);
+                showGpsMessage(`✅ GPS reconnected — added ~${addedDist.toFixed(2)} km estimated during signal loss`, false);
+            }
+
+            setEstimatedDistance(0);
+            estimatedDistanceRef.current = 0;
+            consecutiveTimeoutsRef.current = 0;
+            setSignalLostAt(null);
+
+            // Resume normal GPS tracking from new position (no jump)
+            lastPositionRef.current = newPosition;
+            positionHistoryRef.current = [newPosition];
+            setSmoothSpeed(speed * 3.6);
+            return;
         }
 
         setGpsDebug({
             updates: updateNum,
             lastLat: position.coords.latitude,
             lastLng: position.coords.longitude,
-            accuracy: position.coords.accuracy,
-            speed: position.coords.speed || 0,
+            accuracy: accuracy,
+            speed: speed || 0,
             status: 'Active ✔',
             lastDistance: 0
         });
@@ -214,6 +343,9 @@ function App() {
             lastPositionRef.current = newPosition;
             positionHistoryRef.current = [newPosition];
             isFirstPositionAfterStart.current = false;
+            
+            const tripType = isRideRef.current ? '🚖 Ride' : '🏍️ Personal';
+            showGpsMessage(`🟢 GPS Active (${tripType} - High Accuracy)`, false);
             return;
         }
 
@@ -229,9 +361,9 @@ function App() {
 
             if (distanceMeters < 3) {
                 shouldUpdate = false;
-            } else if (position.coords.accuracy > 100000) {
+            } else if (accuracy > 100000) {
                 shouldUpdate = false;
-            } else if (position.coords.speed !== null && position.coords.speed < 0.5) {
+            } else if (speed !== null && speed < 0.5) {
                 shouldUpdate = distanceMeters >= 2;
             } else if (positionHistoryRef.current.length >= 3) {
                 let totalDistance = 0;
@@ -263,7 +395,7 @@ function App() {
             lastPositionRef.current = newPosition;
             positionHistoryRef.current = [newPosition];
         }
-    }, [calculateDistance]);
+    }, [calculateDistance, gpsSignalLost, showGpsMessage]);
 
     const stopTrip = useCallback(() => {
         if (watchIdRef.current) {
@@ -272,7 +404,32 @@ function App() {
         }
 
         if (currentTrip) {
-            const actualKm = currentTrip.distance;
+            let actualKm = currentTrip.distance;
+            let finalHasEst = hasEstimatedSegment;
+            let finalEstKm = totalEstimatedKm;
+
+            if (gpsSignalLost && estimatedDistanceRef.current > 0) {
+                const added = estimatedDistanceRef.current;
+                actualKm += added;
+                finalHasEst = true;
+                finalEstKm += added;
+
+                setTotalEstimatedKm(prev => prev + added);
+                setHasEstimatedSegment(true);
+                setTotalKmSinceLastFill(prev => prev + added);
+            }
+
+            // Always clear timer
+            if (estimationTimerRef.current) {
+                clearInterval(estimationTimerRef.current);
+                estimationTimerRef.current = null;
+            }
+            setGpsSignalLost(false);
+            setEstimatedDistance(0);
+            estimatedDistanceRef.current = 0;
+            setSignalLostAt(null);
+            consecutiveTimeoutsRef.current = 0;
+
             if (currentTrip.isRide) {
                 setCompletedRideKm(actualKm);
                 setShowRideCompletionDialog(true);
@@ -281,8 +438,11 @@ function App() {
             } else {
                 const completedTrip = {
                     ...currentTrip,
+                    distance: actualKm,
                     endTime: new Date().toISOString(),
-                    isActive: false
+                    isActive: false,
+                    hasEstimatedSegment: finalHasEst,
+                    estimatedKm: finalEstKm
                 };
                 setTrips(prev => [...prev, completedTrip]);
                 setCurrentTrip(null);
@@ -296,7 +456,7 @@ function App() {
         positionCountRef.current = 0;
         positionHistoryRef.current = [];
         isFirstPositionAfterStart.current = true;
-    }, [currentTrip, showGpsMessage]);
+    }, [currentTrip, gpsSignalLost, hasEstimatedSegment, totalEstimatedKm, showGpsMessage]);
 
     // ==========================================
     // SMOOTH SPEED ANIMATION
@@ -482,6 +642,22 @@ function App() {
         if (watchIdRef.current) {
             navigator.geolocation.clearWatch(watchIdRef.current);
             watchIdRef.current = null;
+        }
+
+        // Reset signal loss and estimation state
+        setGpsSignalLost(false);
+        setLastKnownSpeed(0);
+        lastKnownSpeedRef.current = 0;
+        setEstimatedDistance(0);
+        estimatedDistanceRef.current = 0;
+        setTotalEstimatedKm(0);
+        setHasEstimatedSegment(false);
+        setSignalLostAt(null);
+        consecutiveTimeoutsRef.current = 0;
+        recentPositionsRef.current = [];
+        if (estimationTimerRef.current) {
+            clearInterval(estimationTimerRef.current);
+            estimationTimerRef.current = null;
         }
 
         setPetrolEntries([]);
@@ -912,6 +1088,23 @@ function App() {
             return;
         }
 
+        // Reset signal loss and estimation state
+        setGpsSignalLost(false);
+        setLastKnownSpeed(0);
+        lastKnownSpeedRef.current = 0;
+        setEstimatedDistance(0);
+        estimatedDistanceRef.current = 0;
+        setTotalEstimatedKm(0);
+        setHasEstimatedSegment(false);
+        setSignalLostAt(null);
+        consecutiveTimeoutsRef.current = 0;
+        recentPositionsRef.current = [];
+        isRideRef.current = isRideTrip;
+        if (estimationTimerRef.current) {
+            clearInterval(estimationTimerRef.current);
+            estimationTimerRef.current = null;
+        }
+
         positionCountRef.current = 0;
         lastPositionRef.current = null;
         positionHistoryRef.current = [];
@@ -943,36 +1136,18 @@ function App() {
                 options
             );
 
-            const accuracyMode = highAccuracy ? 'High Accuracy' : 'Standard';
-            const tripType = isRideTrip ? '🚖 Ride' : '🏍️ Personal';
-            showGpsMessage('🟢 GPS Active (' + tripType + ' - ' + accuracyMode + ')', false);
-            setGpsDebug(prev => ({ ...prev, status: 'Tracking ' + tripType + ' (' + accuracyMode + ')' }));
+            showGpsMessage('📡 Waiting for accurate GPS signal (≤5 m)...', false);
+            setGpsDebug(prev => ({ ...prev, status: 'Waiting for GPS lock...' }));
         };
 
         navigator.geolocation.getCurrentPosition(
             (position) => {
-                lastPositionRef.current = {
-                    lat: position.coords.latitude,
-                    lng: position.coords.longitude,
-                    accuracy: position.coords.accuracy,
-                    speed: position.coords.speed || 0,
-                    timestamp: Date.now()
-                };
-                positionHistoryRef.current = [lastPositionRef.current];
                 startWatching(true);
             },
             (error) => {
                 if (error.code === 3) {
                     navigator.geolocation.getCurrentPosition(
                         (position) => {
-                            lastPositionRef.current = {
-                                lat: position.coords.latitude,
-                                lng: position.coords.longitude,
-                                accuracy: position.coords.accuracy,
-                                speed: position.coords.speed || 0,
-                                timestamp: Date.now()
-                            };
-                            positionHistoryRef.current = [lastPositionRef.current];
                             startWatching(false);
                         },
                         (retryError) => {
@@ -1693,6 +1868,15 @@ function App() {
                             <div className="w-full py-3 bg-gradient-to-r from-primary-container to-primary rounded-full flex items-center justify-center animate-pulse-record shadow-[0_0_20px_rgba(78,204,163,0.3)]">
                                 <span className="font-label-caps text-label-caps text-on-primary-container uppercase font-bold">🏍️ PERSONAL TRIP IN PROGRESS ({tripTimeText})</span>
                             </div>
+
+                            {/* GPS Signal Loss Banner */}
+                            {gpsSignalLost && (
+                                <div className="glass-card rounded-xl overflow-hidden flex items-center border-l-4 border-l-tertiary bg-tertiary/10 p-3 animate-pulse">
+                                    <span className="material-symbols-outlined text-tertiary mr-2">satellite_alt</span>
+                                    <span className="font-body-md text-tertiary font-bold text-xs">{gpsSignalLossBannerMessage}</span>
+                                </div>
+                            )}
+
                             <section className="flex flex-col items-center justify-center py-6 w-full">
                                 <div className="relative w-full max-w-xs h-40 glass-card rounded-3xl flex items-center justify-center">
                                     {/* Digital Readout */}
@@ -1710,13 +1894,15 @@ function App() {
                                         <span className="font-label-caps text-[10px] text-primary uppercase font-bold">GPS STATUS</span>
                                         <div className="flex items-center gap-1">
                                             <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></div>
-                                            <span className="font-label-caps text-[10px] text-on-surface font-bold">Tracking Personal (High Accuracy)</span>
+                                            <span className="font-label-caps text-[10px] text-on-surface font-bold">
+                                                {gpsSignalLost ? 'Signal Lost' : 'Tracking Personal (High Accuracy)'}
+                                            </span>
                                         </div>
                                     </div>
                                     <div className="font-mono text-[11px] text-on-surface-variant flex gap-4">
                                         <span>Updates: {gpsDebug.updates}</span>
                                         <span>Accuracy: {gpsDebug.accuracy ? gpsDebug.accuracy.toFixed(0) : '8'}m</span>
-                                        <span className="ml-auto">LAT: {gpsDebug.lastLat ? gpsDebug.lastLat.toFixed(4) : '0.0000'}Â° N</span>
+                                        <span className="ml-auto">LAT: {gpsDebug.lastLat ? gpsDebug.lastLat.toFixed(4) : '0.0000'}° N</span>
                                     </div>
                                 </div>
                             </div>
@@ -1726,10 +1912,21 @@ function App() {
                                 <div className="glass-card p-4 rounded-2xl active-glow">
                                     <div className="flex flex-col gap-1">
                                         <span className="font-label-caps text-label-caps text-on-surface-variant uppercase font-bold">CURRENT TRIP</span>
-                                        <div className="flex items-baseline gap-1">
-                                            <span className="font-stats-numeral text-headline-md text-primary font-bold">{distanceVal.toFixed(2)}</span>
-                                            <span className="font-label-caps text-[10px] text-primary font-bold">KM</span>
-                                        </div>
+                                        {gpsSignalLost ? (
+                                            <div className="space-y-1">
+                                                <div className="text-[11px] text-on-surface-variant font-medium">GPS: {distanceVal.toFixed(2)} km</div>
+                                                <div className="text-[11px] text-tertiary font-medium">+ Est: {estimatedDistance.toFixed(2)} km</div>
+                                                <div className="flex items-baseline gap-1 border-t border-white/10 pt-1">
+                                                    <span className="font-stats-numeral text-body-lg text-primary font-bold">{(distanceVal + estimatedDistance).toFixed(2)}</span>
+                                                    <span className="font-label-caps text-[8px] text-primary font-bold">KM</span>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="flex items-baseline gap-1">
+                                                <span className="font-stats-numeral text-headline-md text-primary font-bold">{distanceVal.toFixed(2)}</span>
+                                                <span className="font-label-caps text-[10px] text-primary font-bold">KM</span>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                                 <div className="glass-card p-4 rounded-2xl">
@@ -1826,21 +2023,42 @@ function App() {
                                 </div>
                             </section>
 
+                            {/* GPS Signal Loss Banner */}
+                            {gpsSignalLost && (
+                                <div className="glass-card rounded-xl overflow-hidden flex items-center border-l-4 border-l-tertiary bg-tertiary/10 p-3 animate-pulse">
+                                    <span className="material-symbols-outlined text-tertiary mr-2">satellite_alt</span>
+                                    <span className="font-body-md text-tertiary font-bold text-xs">{gpsSignalLossBannerMessage}</span>
+                                </div>
+                            )}
+
                             {/* GPS & Trip Stats Grid */}
                             <section className="grid grid-cols-2 gap-element-gap">
                                 <div className="col-span-2 glass-card rounded-xl p-4 flex items-center gap-3 border-l-4 border-secondary">
                                     <span className="material-symbols-outlined text-secondary animate-pulse">gps_fixed</span>
                                     <div>
                                         <p className="font-label-caps text-[10px] text-on-surface-variant uppercase font-bold">Navigation System</p>
-                                        <p className="font-body-md text-on-surface">Tracking Ride (High Accuracy)</p>
+                                        <p className="font-body-md text-on-surface">
+                                            {gpsSignalLost ? 'Signal Lost' : 'Tracking Ride (High Accuracy)'}
+                                        </p>
                                     </div>
                                 </div>
                                 <div className="glass-card rounded-xl p-4 border border-secondary/20 ride-glow">
                                     <p className="font-label-caps text-on-surface-variant text-[11px] uppercase mb-1 font-bold">Current Ride</p>
-                                    <div className="flex items-baseline gap-1">
-                                        <span className="font-stats-numeral text-white text-[24px] font-bold">{distanceVal.toFixed(2)}</span>
-                                        <span className="text-on-surface-variant text-[12px] font-bold">km</span>
-                                    </div>
+                                    {gpsSignalLost ? (
+                                        <div className="space-y-1">
+                                            <div className="text-[11px] text-on-surface-variant font-medium">GPS: {distanceVal.toFixed(2)} km</div>
+                                            <div className="text-[11px] text-tertiary font-medium">+ Est: {estimatedDistance.toFixed(2)} km</div>
+                                            <div className="flex items-baseline gap-1 border-t border-white/10 pt-1">
+                                                <span className="font-stats-numeral text-white text-[18px] font-bold">{(distanceVal + estimatedDistance).toFixed(2)}</span>
+                                                <span className="text-on-surface-variant text-[10px] font-bold">km</span>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-baseline gap-1">
+                                            <span className="font-stats-numeral text-white text-[24px] font-bold">{distanceVal.toFixed(2)}</span>
+                                            <span className="text-on-surface-variant text-[12px] font-bold">km</span>
+                                        </div>
+                                    )}
                                 </div>
                                 <div className="glass-card rounded-xl p-4 border border-secondary/20">
                                     <p className="font-label-caps text-on-surface-variant text-[11px] uppercase mb-1 font-bold">Total Trip</p>
@@ -2170,7 +2388,14 @@ function App() {
                                                     <div className="px-4 py-3 grid grid-cols-3 gap-2 bg-white/5">
                                                         <div>
                                                             <p className="text-[9px] text-on-surface-variant uppercase font-bold">Dist</p>
-                                                            <p className="text-[13px] font-semibold text-white">{ride.km.toFixed(1)}km</p>
+                                                            <div className="flex flex-col">
+                                                                <span className="text-[13px] font-semibold text-white">{ride.km.toFixed(1)}km</span>
+                                                                {ride.hasEstimatedSegment && (
+                                                                    <span className="text-[9px] text-tertiary font-bold leading-none mt-0.5">
+                                                                        ~{ride.estimatedKm.toFixed(1)}km EST
+                                                                    </span>
+                                                                )}
+                                                            </div>
                                                         </div>
                                                         <div>
                                                             <p className="text-[9px] text-on-surface-variant uppercase font-bold">Fare</p>
@@ -2337,7 +2562,14 @@ function App() {
                                                                 <div className="px-4 py-3 grid grid-cols-3 gap-2 bg-white/5">
                                                                     <div>
                                                                         <p className="text-[9px] text-on-surface-variant uppercase font-bold">Dist</p>
-                                                                        <p className="text-[13px] font-semibold text-white">{ride.km.toFixed(1)}km</p>
+                                                                        <div className="flex flex-col">
+                                                                            <span className="text-[13px] font-semibold text-white">{ride.km.toFixed(1)}km</span>
+                                                                            {ride.hasEstimatedSegment && (
+                                                                                <span className="text-[9px] text-tertiary font-bold leading-none mt-0.5">
+                                                                                    ~{ride.estimatedKm.toFixed(1)}km EST
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
                                                                     </div>
                                                                     <div>
                                                                         <p className="text-[9px] text-on-surface-variant uppercase font-bold">Fare</p>
@@ -3096,6 +3328,11 @@ function App() {
                                     <div className="text-primary font-display-lg text-[32px] leading-tight tracking-tight font-bold">
                                         {completedRideKm.toFixed(2)} <span className="text-primary/60 font-body-lg text-body-lg">km</span>
                                     </div>
+                                    {hasEstimatedSegment && (
+                                        <div className="text-[11px] text-tertiary font-semibold mt-1">
+                                            (GPS: {(completedRideKm - totalEstimatedKm).toFixed(2)} km + Est: {totalEstimatedKm.toFixed(2)} km)
+                                        </div>
+                                    )}
                                 </div>
                                 <div className="space-y-sm">
                                     <div className="relative bg-surface-container-lowest border border-white/10 rounded-xl p-2">

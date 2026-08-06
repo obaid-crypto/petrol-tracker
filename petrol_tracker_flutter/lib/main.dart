@@ -343,9 +343,18 @@ class TrackerStore extends ChangeNotifier {
 
     _positionStream = Geolocator.getPositionStream(locationSettings: locationSettings).listen(
       (Position position) {
-        gpsStatus = 'Active ✓';
         gpsAccuracy = position.accuracy;
         smoothSpeed = (position.speed >= 0 ? position.speed : 0.0) * 3.6; // convert m/s to km/h
+
+        // Wait until GPS accuracy is 5 metres or better before starting to track.
+        // This prevents phantom distance caused by inaccurate initial GPS fixes.
+        if (position.accuracy > 5.0) {
+          gpsStatus = 'Waiting for GPS lock... (${position.accuracy.toStringAsFixed(0)}m)';
+          notifyListeners();
+          return; // Do not anchor or count distance until signal is good enough.
+        }
+
+        gpsStatus = 'Active ✓';
 
         if (_lastPosition != null) {
           double distanceInMeters = Geolocator.distanceBetween(
@@ -355,7 +364,8 @@ class TrackerStore extends ChangeNotifier {
             position.longitude,
           );
 
-          if (distanceInMeters >= 10 && position.accuracy <= 30) {
+          // Only count movement when accuracy is 5 m or better.
+          if (distanceInMeters >= 10 && position.accuracy <= 5.0) {
             double distanceInKm = distanceInMeters / 1000.0;
             if (currentTrip != null) {
               currentTrip = Trip(
@@ -373,7 +383,9 @@ class TrackerStore extends ChangeNotifier {
             _lastPosition = position;
           }
         } else {
+          // Set the anchor point only once we have a sufficiently accurate fix.
           _lastPosition = position;
+          _showGpsMessage(isRide ? '🟢 GPS Active (Ride Mode)' : '🟢 GPS Active (Personal Mode)');
         }
         notifyListeners();
       },
@@ -384,7 +396,7 @@ class TrackerStore extends ChangeNotifier {
       },
     );
 
-    _showGpsMessage(isRide ? '🟢 GPS Active (Ride Mode)' : '🟢 GPS Active (Personal Mode)');
+    _showGpsMessage('📡 Waiting for accurate GPS signal (≤5 m)...');
   }
 
   void stopTracking(BuildContext context) {

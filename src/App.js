@@ -2031,17 +2031,29 @@ function App() {
                                 </div>
                             )}
 
-                            {/* GPS & Trip Stats Grid */}
-                            <section className="grid grid-cols-2 gap-element-gap">
-                                <div className="col-span-2 glass-card rounded-xl p-4 flex items-center gap-3 border-l-4 border-secondary">
-                                    <span className="material-symbols-outlined text-secondary animate-pulse">gps_fixed</span>
-                                    <div>
-                                        <p className="font-label-caps text-[10px] text-on-surface-variant uppercase font-bold">Navigation System</p>
-                                        <p className="font-body-md text-on-surface">
-                                            {gpsSignalLost ? 'Signal Lost' : 'Tracking Ride (High Accuracy)'}
-                                        </p>
+                            {/* GPS Status Card */}
+                            <div className="glass-card rounded-xl overflow-hidden flex items-center border-l-4 border-l-secondary">
+                                <div className="p-3 w-full">
+                                    <div className="flex justify-between items-center mb-1">
+                                        <span className="font-label-caps text-[10px] text-secondary uppercase font-bold">GPS STATUS</span>
+                                        <div className="flex items-center gap-1">
+                                            <div className="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse"></div>
+                                            <span className="font-label-caps text-[10px] text-on-surface font-bold">
+                                                {gpsSignalLost ? 'Signal Lost' : 'Tracking Ride (High Accuracy)'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div className="font-mono text-[11px] text-on-surface-variant flex gap-4">
+                                        <span>Updates: {gpsDebug.updates}</span>
+                                        <span>Accuracy: {gpsDebug.accuracy ? gpsDebug.accuracy.toFixed(0) : '8'}m</span>
+                                        <span className="ml-auto">LAT: {gpsDebug.lastLat ? gpsDebug.lastLat.toFixed(4) : '0.0000'}° N</span>
                                     </div>
                                 </div>
+                            </div>
+
+                            {/* GPS & Trip Stats Grid */}
+                            <section className="grid grid-cols-2 gap-element-gap">
+
                                 <div className="glass-card rounded-xl p-4 border border-secondary/20 ride-glow">
                                     <p className="font-label-caps text-on-surface-variant text-[11px] uppercase mb-1 font-bold">Current Ride</p>
                                     {gpsSignalLost ? (
@@ -2086,13 +2098,7 @@ function App() {
                                     <span className="material-symbols-outlined">{reserveActive ? 'warning' : 'local_gas_station'}</span>
                                     <span className="font-headline-md font-bold uppercase">{reserveActive ? 'Reserve Active' : 'Switch to Reserve'}</span>
                                 </button>
-                                <button 
-                                    className="w-full py-4 rounded-2xl border border-white/10 glass-card flex items-center justify-center gap-2 hover:bg-white/5 transition-all active:scale-95 cursor-pointer"
-                                    onClick={() => setShowAddReserveModal(true)}
-                                >
-                                    <span className="material-symbols-outlined text-on-surface-variant">add_circle</span>
-                                    <span className="font-body-lg text-on-surface font-semibold">Add Reserve Manually</span>
-                                </button>
+
                             </section>
 
                             {/* Primary Controls */}
@@ -2229,15 +2235,29 @@ function App() {
                                 </div>
                             </section>
 
-                            {/* GPS & Trip Stats Grid */}
-                            <section className="grid grid-cols-2 gap-element-gap">
-                                <div className="col-span-2 glass-card rounded-xl p-4 flex items-center gap-3 border-l-4 border-secondary">
-                                    <span className="material-symbols-outlined text-secondary animate-pulse">gps_fixed</span>
-                                    <div>
-                                        <p className="font-label-caps text-[10px] text-on-surface-variant uppercase font-bold">Navigation System</p>
-                                        <p className="font-body-md text-on-surface">Tracking Ride (High Accuracy)</p>
+                            {/* GPS Status Card */}
+                            <div className="glass-card rounded-xl overflow-hidden flex items-center border-l-4 border-l-secondary">
+                                <div className="p-3 w-full">
+                                    <div className="flex justify-between items-center mb-1">
+                                        <span className="font-label-caps text-[10px] text-secondary uppercase font-bold">GPS STATUS</span>
+                                        <div className="flex items-center gap-1">
+                                            <div className="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse"></div>
+                                            <span className="font-label-caps text-[10px] text-on-surface font-bold">
+                                                {gpsSignalLost ? 'Signal Lost' : 'Tracking Ride (High Accuracy)'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div className="font-mono text-[11px] text-on-surface-variant flex gap-4">
+                                        <span>Updates: {gpsDebug.updates}</span>
+                                        <span>Accuracy: {gpsDebug.accuracy ? gpsDebug.accuracy.toFixed(0) : '8'}m</span>
+                                        <span className="ml-auto">LAT: {gpsDebug.lastLat ? gpsDebug.lastLat.toFixed(4) : '0.0000'}° N</span>
                                     </div>
                                 </div>
+                            </div>
+
+                            {/* GPS & Trip Stats Grid */}
+                            <section className="grid grid-cols-2 gap-element-gap">
+
                                 <div className="glass-card rounded-xl p-4 border border-secondary/20 ride-glow">
                                     <p className="font-label-caps text-on-surface-variant text-[11px] uppercase mb-1 font-bold">Current Ride</p>
                                     <div className="flex items-baseline gap-1">
